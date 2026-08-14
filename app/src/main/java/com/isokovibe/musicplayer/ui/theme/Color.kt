@@ -13,8 +13,19 @@ val VibeWhite = Color(0xFFFFFFFF)
 val VibeSurfaceDark = Color(0xFF161616)
 val VibeSurfaceVariantDark = Color(0xFF262626)
 val VibeOutlineDark = Color(0xFF3D3D3D)
+val VibeOutlineVariantDark = Color(0xFF4D4D4D)
 
 val VibeBackgroundLight = Color(0xFFFFFFFF)
 val VibeSurfaceLight = Color(0xFFF7F5F5)
 val VibeSurfaceVariantLight = Color(0xFFEDE3E3)
 val VibeOutlineLight = Color(0xFFD8CACA)
+val VibeOutlineVariantLight = Color(0xFFE3D5D5)
+
+// "Container" tones for every ColorScheme role — Material3 auto-derives
+// these from a purple baseline palette when they're left unset, which is
+// what was leaking through as a lilac tint on selected nav items and chips.
+// Keeping everything in the red family here closes that gap.
+val VibeContainerLight = Color(0xFFFFDAD4)     // soft red tint
+val VibeOnContainerLight = Color(0xFF410001)
+val VibeContainerDark = Color(0xFF930000)      // deep red tint
+val VibeOnContainerDark = Color(0xFFFFDAD4)

@@ -16,7 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.isokovibe.musicplayer.R
 
 /**
@@ -35,13 +38,18 @@ fun BrandTopBar(modifier: Modifier = Modifier) {
                     painter = painterResource(R.drawable.ic_isokovibe_logo),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(7.dp))
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "iSokoVibe",
-                    style = MaterialTheme.typography.titleLarge
+                    text = "iSokoVibe Music Player",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        fontSize = 17.sp
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         },

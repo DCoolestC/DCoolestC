@@ -44,7 +44,12 @@ fun PlaylistsScreen(
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
 
+    // Without this, the FAB positions itself relative to this Scaffold's own
+    // bounds — which extend all the way to the bottom of the screen, right
+    // behind the outer bottom nav bar/mini player/ad banner. That's what was
+    // making the + button unreachable/invisible.
     Scaffold(
+        modifier = Modifier.padding(bottom = contentPadding.calculateBottomPadding()),
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "New playlist")

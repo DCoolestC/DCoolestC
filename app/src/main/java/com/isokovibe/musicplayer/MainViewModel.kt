@@ -7,6 +7,7 @@ import com.isokovibe.musicplayer.data.MusicRepository
 import com.isokovibe.musicplayer.data.Playlist
 import com.isokovibe.musicplayer.data.Song
 import com.isokovibe.musicplayer.data.SortOption
+import com.isokovibe.musicplayer.data.TEST_BANNER_AD_UNIT_ID
 import com.isokovibe.musicplayer.data.ThemeMode
 import com.isokovibe.musicplayer.data.UserDataRepository
 import com.isokovibe.musicplayer.playback.PlaybackController
@@ -50,6 +51,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userData.playlists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val themeMode: StateFlow<ThemeMode> =
         userData.themeMode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
+    val animateAlbumArt: StateFlow<Boolean> =
+        userData.animateAlbumArt.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val miniPlayerColor: StateFlow<Int?> =
+        userData.miniPlayerColor.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val showAds: StateFlow<Boolean> =
+        userData.showAds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val adUnitId: StateFlow<String> =
+        userData.adUnitId.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TEST_BANNER_AD_UNIT_ID)
+    val notificationsEnabled: StateFlow<Boolean> =
+        userData.notificationsEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
 
@@ -146,6 +157,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleFavorite(songId: Long) = viewModelScope.launch { userData.toggleFavorite(songId) }
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch { userData.setThemeMode(mode) }
+    fun setAnimateAlbumArt(enabled: Boolean) = viewModelScope.launch { userData.setAnimateAlbumArt(enabled) }
+    fun setMiniPlayerColor(colorArgb: Int?) = viewModelScope.launch { userData.setMiniPlayerColor(colorArgb) }
+    fun setShowAds(enabled: Boolean) = viewModelScope.launch { userData.setShowAds(enabled) }
+    fun setAdUnitId(id: String) = viewModelScope.launch { userData.setAdUnitId(id) }
+    fun setNotificationsEnabled(enabled: Boolean) = viewModelScope.launch { userData.setNotificationsEnabled(enabled) }
     fun createPlaylist(name: String) = viewModelScope.launch { userData.createPlaylist(name) }
     fun deletePlaylist(id: String) = viewModelScope.launch { userData.deletePlaylist(id) }
     fun renamePlaylist(id: String, name: String) = viewModelScope.launch { userData.renamePlaylist(id, name) }

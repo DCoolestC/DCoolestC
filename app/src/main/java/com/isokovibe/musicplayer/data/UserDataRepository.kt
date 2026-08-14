@@ -1,7 +1,9 @@
 package com.isokovibe.musicplayer.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.util.UUID
@@ -13,9 +15,13 @@ import kotlinx.serialization.json.Json
 
 private val Context.userDataStore by preferencesDataStore(name = "isokovibe_user_data")
 
+/** Google's official AdMob test banner unit — swap for a real one in Settings once you have an AdMob account. */
+const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
+
 /**
  * Everything the app remembers locally between launches: theme choice,
- * favorites, and playlists. No account, no network — just DataStore.
+ * favorites, playlists, and display/ad/notification preferences. No
+ * account, no server — just DataStore.
  */
 class UserDataRepository(private val context: Context) {
 
@@ -23,6 +29,11 @@ class UserDataRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val FAVORITES = stringPreferencesKey("favorites")
         val PLAYLISTS = stringPreferencesKey("playlists")
+        val ANIMATE_ALBUM_ART = booleanPreferencesKey("animate_album_art")
+        val MINI_PLAYER_COLOR = intPreferencesKey("mini_player_color")
+        val SHOW_ADS = booleanPreferencesKey("show_ads")
+        val AD_UNIT_ID = stringPreferencesKey("ad_unit_id")
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -44,8 +55,48 @@ class UserDataRepository(private val context: Context) {
         } ?: emptyList()
     }
 
+    /** Whether the Now Playing album art spins while a track is playing. */
+    val animateAlbumArt: Flow<Boolean> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.ANIMATE_ALBUM_ART] ?: true
+    }
+
+    /** Mini player background color, stored as an ARGB int; null means "use the theme default". */
+    val miniPlayerColor: Flow<Int?> = context.userDataStore.data.map { prefs -> prefs[Keys.MINI_PLAYER_COLOR] }
+
+    val showAds: Flow<Boolean> = context.userDataStore.data.map { prefs -> prefs[Keys.SHOW_ADS] ?: true }
+
+    val adUnitId: Flow<String> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.AD_UNIT_ID]?.takeIf { it.isNotBlank() } ?: TEST_BANNER_AD_UNIT_ID
+    }
+
+    val notificationsEnabled: Flow<Boolean> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.NOTIFICATIONS_ENABLED] ?: false
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.userDataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    }
+
+    suspend fun setAnimateAlbumArt(enabled: Boolean) {
+        context.userDataStore.edit { it[Keys.ANIMATE_ALBUM_ART] = enabled }
+    }
+
+    suspend fun setMiniPlayerColor(colorArgb: Int?) {
+        context.userDataStore.edit {
+            if (colorArgb == null) it.remove(Keys.MINI_PLAYER_COLOR) else it[Keys.MINI_PLAYER_COLOR] = colorArgb
+        }
+    }
+
+    suspend fun setShowAds(enabled: Boolean) {
+        context.userDataStore.edit { it[Keys.SHOW_ADS] = enabled }
+    }
+
+    suspend fun setAdUnitId(id: String) {
+        context.userDataStore.edit { it[Keys.AD_UNIT_ID] = id }
+    }
+
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        context.userDataStore.edit { it[Keys.NOTIFICATIONS_ENABLED] = enabled }
     }
 
     suspend fun toggleFavorite(songId: Long) {

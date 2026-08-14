@@ -39,8 +39,30 @@ Media3 (ExoPlayer).
   system theme — Material You dynamic color is intentionally not used, so
   the app always reads as iSokoVibe rather than tinting to the phone's
   wallpaper
+- Bundled Roboto (`res/font/`) so text always renders in Roboto instead of
+  whatever an OEM skin substitutes for the system font; every
+  `Typography` role is set explicitly (not just the ones this app touches
+  directly) so buttons/chips/labels get it too
+- Every `ColorScheme` role is set explicitly, not just primary/surface —
+  Material3 auto-derives the roles you leave unset from its purple
+  baseline palette, which is what was leaking through as a lilac tint on
+  selected nav items and chips
+- Instant screen transitions (Compose Navigation's default fade animation
+  is disabled) for a snappier feel
+- Spinning "vinyl" album art while playing, togglable in Settings
+- Mini player gets a Previous button alongside Play/Pause and Next, and
+  its background color is customizable from Settings (a few brand-red/
+  black/white presets)
+- Sticky footer ad banner (Google AdMob), with a Settings toggle and an
+  editable ad unit ID — ships with Google's official test ad unit by
+  default so it builds and shows test ads out of the box; swap in a real
+  AdMob ad unit ID once there's an AdMob account behind it
+- Notification channel + permission handling in place for a future
+  "new music on iSokoVibe.com.ng" push notification — the Settings toggle
+  requests the permission, but nothing sends a notification yet (see
+  below)
 
-## Deferred — needs device-level testing to get right
+## Deferred — needs your input or device-level testing to get right
 
 These didn't make this pass because they need real hardware/emulator
 verification I can't safely fake from a CI-only build loop — shipping a
@@ -61,6 +83,15 @@ done yet:
 - **Listening stats**
 - **A-B repeat**
 - A real Play Store–size (512×512) icon export
+- **Push notifications for new site content** — the client side (channel,
+  permission, Settings toggle) is in place, but *sending* a notification
+  when something new posts on iSokoVibe.com.ng needs two decisions only
+  you can make: (1) a Firebase project + `google-services.json` for FCM
+  (or another push provider), and (2) how "new content" gets detected on
+  the site's end — a webhook/plugin/cron job on whatever the site runs on
+  (WordPress? custom?) that calls the push API when something's posted.
+  Tell me the CMS and whether you already have a Firebase project, and
+  I'll wire the rest up.
 
 ## Branding
 
@@ -113,7 +144,9 @@ app/src/main/java/com/isokovibe/musicplayer/
     ├── SettingsScreen.kt
     ├── NowPlayingScreen.kt
     ├── theme/                 # Color.kt, Theme.kt, Type.kt
-    └── components/            # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog
+    └── components/            # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog, BannerAdView
+
+app/src/main/res/font/         # Bundled Roboto TTFs (Apache 2.0)
 ```
 
 ## Building

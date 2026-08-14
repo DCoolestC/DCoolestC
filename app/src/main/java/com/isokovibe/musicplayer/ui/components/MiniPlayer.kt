@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.isokovibe.musicplayer.data.Song
@@ -29,14 +31,16 @@ fun MiniPlayer(
     isPlaying: Boolean,
     onTogglePlayPause: () -> Unit,
     onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
     onOpenNowPlaying: () -> Unit,
+    backgroundColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpenNowPlaying),
-        color = MaterialTheme.colorScheme.surface,
+        color = backgroundColor ?: MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp
     ) {
         Row(
@@ -52,7 +56,7 @@ fun MiniPlayer(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 12.dp)
+                    .padding(horizontal = 10.dp)
             ) {
                 Text(
                     text = song.title,
@@ -69,6 +73,9 @@ fun MiniPlayer(
                 )
             }
 
+            IconButton(onClick = onSkipPrevious) {
+                Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
+            }
             IconButton(onClick = onTogglePlayPause) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
