@@ -12,6 +12,7 @@ import com.isokovibe.musicplayer.data.ThemeMode
 import com.isokovibe.musicplayer.data.UserDataRepository
 import com.isokovibe.musicplayer.playback.PlaybackController
 import com.isokovibe.musicplayer.playback.PlaybackUiState
+import com.isokovibe.musicplayer.push.PushNotificationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -100,6 +101,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         playback.connect()
+        // Keeps the FCM topic subscription in sync with the persisted
+        // preference, including on cold start (e.g. after a reinstall).
+        viewModelScope.launch {
+            userData.notificationsEnabled.collect { enabled -> PushNotificationManager.setSubscribed(enabled) }
+        }
     }
 
     fun onPermissionGranted() {

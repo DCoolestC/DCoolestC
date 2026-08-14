@@ -57,10 +57,42 @@ Media3 (ExoPlayer).
   editable ad unit ID — ships with Google's official test ad unit by
   default so it builds and shows test ads out of the box; swap in a real
   AdMob ad unit ID once there's an AdMob account behind it
-- Notification channel + permission handling in place for a future
-  "new music on iSokoVibe.com.ng" push notification — the Settings toggle
-  requests the permission, but nothing sends a notification yet (see
-  below)
+- Push notifications for new iSokoVibe.com.ng content — code is fully
+  wired (Android FCM client + topic subscription + a WordPress plugin
+  that sends the push when a post is published), waiting only on
+  `app/google-services.json` from your Firebase project. See
+  "Push notifications setup" below.
+
+## Push notifications setup
+
+Two pieces, both already written:
+
+1. **Android app** (`app/src/main/java/.../push/`) — subscribes to the
+   FCM topic `isokovibe_new_music` when a user turns on "Notify me about
+   new music" in Settings, and shows a notification when a push arrives
+   on that topic. Inert until `app/google-services.json` exists (the
+   Gradle build checks for the file and skips applying the Firebase
+   plugin if it's missing, so the build stays green either way).
+
+   To activate: in the [Firebase console](https://console.firebase.google.com/),
+   add an Android app to your project with package name
+   `com.isokovibe.musicplayer`, download the resulting
+   `google-services.json`, and drop it in `app/`. It's safe to commit —
+   [per Google's own docs](https://firebase.google.com/docs/projects/learn-more#config-files-objects)
+   it holds identifiers, not secrets. Anyone with an existing install of
+   an earlier debug build (package name had a `.debug` suffix, since
+   removed to match what gets registered in Firebase) will need to
+   uninstall and reinstall once this lands.
+
+2. **WordPress plugin** (`wordpress-plugin/isokovibe-push-notifications/`)
+   — sends the actual push whenever a post is published, via the FCM
+   HTTP v1 API (hand-signed JWT + OAuth2, no Composer dependencies, so it
+   runs on ordinary WordPress hosting). Install it on iSokoVibe.com.ng,
+   then in wp-admin go to Settings → iSokoVibe Push and paste in a
+   Firebase **service account** JSON (different file from
+   `google-services.json` — generate it from Firebase console → Project
+   settings → Service accounts). Full instructions in that folder's
+   README.
 
 ## Deferred — needs your input or device-level testing to get right
 
@@ -83,15 +115,9 @@ done yet:
 - **Listening stats**
 - **A-B repeat**
 - A real Play Store–size (512×512) icon export
-- **Push notifications for new site content** — the client side (channel,
-  permission, Settings toggle) is in place, but *sending* a notification
-  when something new posts on iSokoVibe.com.ng needs two decisions only
-  you can make: (1) a Firebase project + `google-services.json` for FCM
-  (or another push provider), and (2) how "new content" gets detected on
-  the site's end — a webhook/plugin/cron job on whatever the site runs on
-  (WordPress? custom?) that calls the push API when something's posted.
-  Tell me the CMS and whether you already have a Firebase project, and
-  I'll wire the rest up.
+
+Push notifications are no longer in this list — see "Push notifications
+setup" above, they just need `app/google-services.json` to go live.
 
 ## Branding
 
@@ -137,6 +163,9 @@ app/src/main/java/com/isokovibe/musicplayer/
 ├── playback/
 │   ├── MusicService.kt       # MediaSessionService hosting ExoPlayer
 │   └── PlaybackController.kt # MediaController wrapper: queue, speed, sleep timer
+├── push/
+│   ├── PushNotificationManager.kt   # FCM topic subscribe/unsubscribe
+│   └── IsokoVibeMessagingService.kt # Shows the notification when a push arrives
 └── ui/
     ├── LibraryScreen.kt
     ├── PlaylistsScreen.kt
@@ -147,6 +176,7 @@ app/src/main/java/com/isokovibe/musicplayer/
     └── components/            # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog, BannerAdView
 
 app/src/main/res/font/         # Bundled Roboto TTFs (Apache 2.0)
+wordpress-plugin/isokovibe-push-notifications/  # Sends the push on publish
 ```
 
 ## Building

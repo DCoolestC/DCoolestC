@@ -5,6 +5,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// Push notifications (Firebase Cloud Messaging) only activate once
+// google-services.json is dropped into this module — until then the build
+// stays green, the Firebase SDK just has no default app to talk to
+// (PushNotificationManager already no-ops gracefully in that case).
+val hasFirebaseConfig = file("google-services.json").exists()
+if (hasFirebaseConfig) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.isokovibe.musicplayer"
     compileSdk = 34
@@ -31,7 +40,9 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
+            // No .debug suffix: keeping applicationId identical to the
+            // eventual release build means it matches whatever package
+            // name gets registered in Firebase for push notifications.
         }
     }
 
@@ -91,6 +102,11 @@ dependencies {
 
     // Sticky footer ad banner (Settings can turn this off)
     implementation("com.google.android.gms:play-services-ads:23.3.0")
+
+    // Push notifications. The library resolves fine even before
+    // google-services.json exists — see the `hasFirebaseConfig` check above.
+    implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
