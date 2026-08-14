@@ -102,7 +102,7 @@ fun PlaylistDetailScreen(
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 Button(
                     onClick = onPlayAll,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp)
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Text(" Play all")
@@ -113,11 +113,11 @@ fun PlaylistDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onSongClick(song) }
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AlbumArt(uri = song.albumArtUri, modifier = Modifier.size(44.dp))
-                            Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                            Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
                                 Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(
                                     song.artist,

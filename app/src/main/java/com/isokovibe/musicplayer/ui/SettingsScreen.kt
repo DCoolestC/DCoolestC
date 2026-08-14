@@ -82,7 +82,7 @@ fun SettingsScreen(
         item { SectionHeader("Appearance") }
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ThemeMode.entries.forEach { mode ->
@@ -99,7 +99,7 @@ fun SettingsScreen(
         item { SectionHeader("Playback speed") }
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 PLAYBACK_SPEEDS.forEach { speed ->
@@ -115,7 +115,7 @@ fun SettingsScreen(
         item { SectionDivider() }
         item { SectionHeader("Sleep timer") }
         item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 8.dp)) {
                 if (sleepTimerRemainingMs != null) {
                     val minutesLeft = (sleepTimerRemainingMs / 60_000L) + 1
                     Text(
@@ -143,7 +143,7 @@ fun SettingsScreen(
         item { SectionHeader("Mini player color") }
         item {
             LazyRow(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(MINI_PLAYER_COLOR_PRESETS) { (label, color) ->
@@ -194,14 +194,14 @@ fun SettingsScreen(
                 "•  $feature",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
             )
         }
 
         item { SectionDivider() }
         item {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Image(
@@ -245,7 +245,7 @@ private fun SectionHeader(title: String) {
         text = title,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
     )
 }
 

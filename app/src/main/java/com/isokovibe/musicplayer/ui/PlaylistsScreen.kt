@@ -95,7 +95,7 @@ fun PlaylistsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onPlaylistClick(playlist) }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = 8.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {

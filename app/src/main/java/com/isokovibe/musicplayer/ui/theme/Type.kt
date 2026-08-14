@@ -24,7 +24,10 @@ val RobotoFamily = FontFamily(
 private val baseline = Typography()
 
 // Heavier weights on the display/title styles to echo the bold, chunky
-// poster-style wordmark used in iSokoVibe's brand art.
+// poster-style wordmark used in iSokoVibe's brand art. Body/label sizes are
+// trimmed down and weighted so primary text (song/playlist titles) reads as
+// bold while secondary text (artist, album, counts) stays small and light —
+// a denser, more deliberate hierarchy instead of everything at one size.
 val IsokoVibeTypography = Typography(
     displayLarge = baseline.displayLarge.copy(fontFamily = RobotoFamily),
     displayMedium = baseline.displayMedium.copy(fontFamily = RobotoFamily),
@@ -32,17 +35,19 @@ val IsokoVibeTypography = Typography(
     headlineLarge = baseline.headlineLarge.copy(fontFamily = RobotoFamily),
     headlineMedium = baseline.headlineMedium.copy(fontFamily = RobotoFamily),
     headlineSmall = baseline.headlineSmall.copy(fontFamily = RobotoFamily),
-    titleLarge = baseline.titleLarge.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Black, fontSize = 26.sp),
+    titleLarge = baseline.titleLarge.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Black, fontSize = 24.sp),
     titleMedium = baseline.titleMedium.copy(
         fontFamily = RobotoFamily,
         fontWeight = FontWeight.ExtraBold,
-        fontSize = 18.sp
+        fontSize = 17.sp
     ),
-    titleSmall = baseline.titleSmall.copy(fontFamily = RobotoFamily),
-    bodyLarge = baseline.bodyLarge.copy(fontFamily = RobotoFamily),
-    bodyMedium = baseline.bodyMedium.copy(fontFamily = RobotoFamily),
-    bodySmall = baseline.bodySmall.copy(fontFamily = RobotoFamily),
-    labelLarge = baseline.labelLarge.copy(fontFamily = RobotoFamily),
-    labelMedium = baseline.labelMedium.copy(fontFamily = RobotoFamily),
-    labelSmall = baseline.labelSmall.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Bold)
+    titleSmall = baseline.titleSmall.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+    // Primary text — song titles, playlist names, section headers' content.
+    bodyLarge = baseline.bodyLarge.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp),
+    // Secondary text — artist/album, subtitles, descriptions. Small and light.
+    bodyMedium = baseline.bodyMedium.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Normal, fontSize = 13.sp),
+    bodySmall = baseline.bodySmall.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Normal, fontSize = 11.sp),
+    labelLarge = baseline.labelLarge.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp),
+    labelMedium = baseline.labelMedium.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Medium, fontSize = 11.sp),
+    labelSmall = baseline.labelSmall.copy(fontFamily = RobotoFamily, fontWeight = FontWeight.Bold, fontSize = 10.sp)
 )

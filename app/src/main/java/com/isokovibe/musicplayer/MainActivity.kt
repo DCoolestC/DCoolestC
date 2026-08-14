@@ -116,7 +116,7 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                             onSkipPrevious = viewModel::skipToPrevious,
                             onOpenNowPlaying = { navController.navigate(ROUTE_NOW_PLAYING) },
                             backgroundColor = miniPlayerColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                         )
                     }
                     NavigationBar {

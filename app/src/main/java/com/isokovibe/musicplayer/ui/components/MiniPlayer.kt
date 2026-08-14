@@ -1,5 +1,7 @@
 package com.isokovibe.musicplayer.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.isokovibe.musicplayer.data.Song
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MiniPlayer(
     song: Song,
@@ -62,7 +65,8 @@ fun MiniPlayer(
                     text = song.title,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee()
                 )
                 Text(
                     text = song.artist,

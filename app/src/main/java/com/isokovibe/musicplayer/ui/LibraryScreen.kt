@@ -137,14 +137,15 @@ private fun LibraryControls(
     onToggleFavoritesOnly: (Boolean) -> Unit,
     onRescan: () -> Unit
 ) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Search your library") },
+                placeholder = { Text("Search your library", style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                textStyle = MaterialTheme.typography.bodyMedium,
                 singleLine = true
             )
             IconButton(onClick = onRescan) {
@@ -152,7 +153,7 @@ private fun LibraryControls(
             }
         }
         LazyRow(
-            modifier = Modifier.padding(top = 10.dp),
+            modifier = Modifier.padding(top = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
@@ -272,11 +273,11 @@ private fun SongRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AlbumArt(uri = song.albumArtUri, modifier = Modifier.size(48.dp))
-        Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.bodyLarge,
