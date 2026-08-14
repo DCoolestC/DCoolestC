@@ -1,10 +1,5 @@
 package com.isokovibe.musicplayer.ui
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -66,7 +60,6 @@ fun NowPlayingScreen(
     song: Song?,
     playback: PlaybackUiState,
     isFavorite: Boolean,
-    animateAlbumArt: Boolean,
     onTogglePlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
@@ -128,26 +121,12 @@ fun NowPlayingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            val shouldSpin = animateAlbumArt && playback.isPlaying
-            val infiniteTransition = rememberInfiniteTransition(label = "albumArtRotation")
-            val rotationDegrees by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 360f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 8000, easing = LinearEasing)
-                ),
-                label = "albumArtRotationDegrees"
-            )
-
             AlbumArt(
                 uri = song?.albumArtUri,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .rotate(if (shouldSpin) rotationDegrees else 0f),
-                // Spinning a rounded-square looks odd (corners visibly rotate) —
-                // switch to a circle, vinyl-style, while it's animating.
-                shape = if (animateAlbumArt) CircleShape else RoundedCornerShape(24.dp)
+                    .aspectRatio(1f),
+                shape = RoundedCornerShape(24.dp)
             )
 
             Text(

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,6 +66,7 @@ fun LibraryScreen(
     onAddToPlaylist: (Playlist, Song) -> Unit,
     onCreatePlaylistAndAdd: (String, Song) -> Unit,
     onRequestPermission: () -> Unit,
+    onRescan: () -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     var songForPlaylistPicker by remember { mutableStateOf<Song?>(null) }
@@ -81,7 +83,8 @@ fun LibraryScreen(
                 showFavoritesOnly = showFavoritesOnly,
                 onSearchQueryChange = onSearchQueryChange,
                 onSortOptionChange = onSortOptionChange,
-                onToggleFavoritesOnly = onToggleFavoritesOnly
+                onToggleFavoritesOnly = onToggleFavoritesOnly,
+                onRescan = onRescan
             )
         }
 
@@ -131,17 +134,23 @@ private fun LibraryControls(
     showFavoritesOnly: Boolean,
     onSearchQueryChange: (String) -> Unit,
     onSortOptionChange: (SortOption) -> Unit,
-    onToggleFavoritesOnly: (Boolean) -> Unit
+    onToggleFavoritesOnly: (Boolean) -> Unit,
+    onRescan: () -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search your library") },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            singleLine = true
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Search your library") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                singleLine = true
+            )
+            IconButton(onClick = onRescan) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Scan library")
+            }
+        }
         LazyRow(
             modifier = Modifier.padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

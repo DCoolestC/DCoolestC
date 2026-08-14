@@ -41,9 +41,7 @@ import com.isokovibe.musicplayer.ui.NowPlayingScreen
 import com.isokovibe.musicplayer.ui.PlaylistDetailScreen
 import com.isokovibe.musicplayer.ui.PlaylistsScreen
 import com.isokovibe.musicplayer.ui.SettingsScreen
-import com.isokovibe.musicplayer.ui.components.BannerAdView
 import com.isokovibe.musicplayer.ui.components.BrandTopBar
-import com.isokovibe.musicplayer.ui.components.CustomAdCarousel
 import com.isokovibe.musicplayer.ui.components.MiniPlayer
 import com.isokovibe.musicplayer.ui.theme.IsokoVibeTheme
 
@@ -97,15 +95,7 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val favorites by viewModel.favorites.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
-    val animateAlbumArt by viewModel.animateAlbumArt.collectAsState()
     val miniPlayerColorArgb by viewModel.miniPlayerColor.collectAsState()
-    val showAds by viewModel.showAds.collectAsState()
-    val adUnitId by viewModel.adUnitId.collectAsState()
-    val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
-    val useCustomAds by viewModel.useCustomAds.collectAsState()
-    val customAdsFeedUrl by viewModel.customAdsFeedUrl.collectAsState()
-    val customAds by viewModel.customAds.collectAsState()
-    val customAdsError by viewModel.customAdsError.collectAsState()
     val currentSong = viewModel.songById(playbackState.currentSongId)
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -149,14 +139,6 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                             label = { Text("Settings") }
                         )
                     }
-                    // Sticky footer ad slot, pinned below the tab bar — the
-                    // operator's own ads win when there are any, AdMob is
-                    // the fallback.
-                    if (useCustomAds && customAds.isNotEmpty()) {
-                        CustomAdCarousel(ads = customAds)
-                    } else if (showAds) {
-                        BannerAdView(adUnitId = adUnitId)
-                    }
                 }
             }
         }
@@ -188,6 +170,7 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onAddToPlaylist = { playlist, song -> viewModel.addSongToPlaylist(playlist.id, song.id) },
                     onCreatePlaylistAndAdd = { name, song -> viewModel.createPlaylistAndAddSong(name, song.id) },
                     onRequestPermission = { permissionState.launchPermissionRequest() },
+                    onRescan = viewModel::rescanLibrary,
                     contentPadding = padding
                 )
             }
@@ -207,23 +190,8 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onPlaybackSpeedChange = viewModel::setPlaybackSpeed,
                     sleepTimerRemainingMs = playbackState.sleepTimerRemainingMs,
                     onSetSleepTimer = viewModel::startSleepTimer,
-                    animateAlbumArt = animateAlbumArt,
-                    onAnimateAlbumArtChange = viewModel::setAnimateAlbumArt,
                     miniPlayerColorArgb = miniPlayerColorArgb,
                     onMiniPlayerColorChange = viewModel::setMiniPlayerColor,
-                    showAds = showAds,
-                    onShowAdsChange = viewModel::setShowAds,
-                    adUnitId = adUnitId,
-                    onAdUnitIdChange = viewModel::setAdUnitId,
-                    notificationsEnabled = notificationsEnabled,
-                    onNotificationsEnabledChange = viewModel::setNotificationsEnabled,
-                    useCustomAds = useCustomAds,
-                    onUseCustomAdsChange = viewModel::setUseCustomAds,
-                    customAdsFeedUrl = customAdsFeedUrl,
-                    onCustomAdsFeedUrlChange = viewModel::setCustomAdsFeedUrl,
-                    customAdsCount = customAds.size,
-                    customAdsError = customAdsError,
-                    onRefreshCustomAds = viewModel::refreshCustomAds,
                     contentPadding = padding
                 )
             }
@@ -254,7 +222,6 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     song = currentSong,
                     playback = playbackState,
                     isFavorite = currentSong?.let { it.id in favorites } ?: false,
-                    animateAlbumArt = animateAlbumArt,
                     onTogglePlayPause = viewModel::togglePlayPause,
                     onSkipNext = viewModel::skipToNext,
                     onSkipPrevious = viewModel::skipToPrevious,
