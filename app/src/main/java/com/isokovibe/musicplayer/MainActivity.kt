@@ -60,7 +60,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val themeMode by viewModel.themeMode.collectAsState()
-            IsokoVibeTheme(themeMode = themeMode) {
+            val colorSkin by viewModel.colorSkin.collectAsState()
+            val fontCombination by viewModel.fontCombination.collectAsState()
+            val fontSizeScale by viewModel.fontSizeScale.collectAsState()
+            val fontWeightPreference by viewModel.fontWeightPreference.collectAsState()
+            IsokoVibeTheme(
+                themeMode = themeMode,
+                colorSkin = colorSkin,
+                fontCombination = fontCombination,
+                fontSizeScale = fontSizeScale,
+                fontWeightPreference = fontWeightPreference
+            ) {
                 Surface {
                     IsokoVibeApp(viewModel)
                 }
@@ -95,7 +105,14 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val favorites by viewModel.favorites.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
+    val colorSkin by viewModel.colorSkin.collectAsState()
+    val fontCombination by viewModel.fontCombination.collectAsState()
+    val fontSizeScale by viewModel.fontSizeScale.collectAsState()
+    val fontWeightPreference by viewModel.fontWeightPreference.collectAsState()
     val miniPlayerColorArgb by viewModel.miniPlayerColor.collectAsState()
+    val minTrackDuration by viewModel.minTrackDuration.collectAsState()
+    val excludeWhatsAppVoiceNotes by viewModel.excludeWhatsAppVoiceNotes.collectAsState()
+    val queue by viewModel.queue.collectAsState()
     val currentSong = viewModel.songById(playbackState.currentSongId)
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -170,7 +187,7 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onAddToPlaylist = { playlist, song -> viewModel.addSongToPlaylist(playlist.id, song.id) },
                     onCreatePlaylistAndAdd = { name, song -> viewModel.createPlaylistAndAddSong(name, song.id) },
                     onRequestPermission = { permissionState.launchPermissionRequest() },
-                    onRescan = viewModel::rescanLibrary,
+                    onRescan = { viewModel.rescanLibrary() },
                     contentPadding = padding
                 )
             }
@@ -190,8 +207,20 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onPlaybackSpeedChange = viewModel::setPlaybackSpeed,
                     sleepTimerRemainingMs = playbackState.sleepTimerRemainingMs,
                     onSetSleepTimer = viewModel::startSleepTimer,
+                    colorSkin = colorSkin,
+                    onColorSkinChange = viewModel::setColorSkin,
+                    fontCombination = fontCombination,
+                    onFontCombinationChange = viewModel::setFontCombination,
+                    fontSizeScale = fontSizeScale,
+                    onFontSizeScaleChange = viewModel::setFontSizeScale,
+                    fontWeightPreference = fontWeightPreference,
+                    onFontWeightPreferenceChange = viewModel::setFontWeightPreference,
                     miniPlayerColorArgb = miniPlayerColorArgb,
                     onMiniPlayerColorChange = viewModel::setMiniPlayerColor,
+                    minTrackDuration = minTrackDuration,
+                    onMinTrackDurationChange = viewModel::setMinTrackDuration,
+                    excludeWhatsAppVoiceNotes = excludeWhatsAppVoiceNotes,
+                    onExcludeWhatsAppVoiceNotesChange = viewModel::setExcludeWhatsAppVoiceNotes,
                     contentPadding = padding
                 )
             }
@@ -222,6 +251,7 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     song = currentSong,
                     playback = playbackState,
                     isFavorite = currentSong?.let { it.id in favorites } ?: false,
+                    queue = queue,
                     onTogglePlayPause = viewModel::togglePlayPause,
                     onSkipNext = viewModel::skipToNext,
                     onSkipPrevious = viewModel::skipToPrevious,
@@ -231,6 +261,7 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it.id) } },
                     onSetPlaybackSpeed = viewModel::setPlaybackSpeed,
                     onSetSleepTimer = viewModel::startSleepTimer,
+                    onQueueItemClick = viewModel::playFromQueue,
                     onBack = { navController.popBackStack() }
                 )
             }

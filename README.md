@@ -18,42 +18,67 @@ Media3 (ExoPlayer).
   when a track has no usable embedded art (the legacy
   `content://media/external/audio/albumart` URI Android hands back often
   fails to resolve, so this is the common case, not the exception)
-- **Library** — search, sort (title/artist/album/duration), a Favorites
-  filter chip, and a manual **Scan library** button (next to search) to
-  re-query `MediaStore` on demand — for when you've dropped new files on
-  the device and don't want to relaunch the app
+- **Library** — search, sort (title/artist/album/duration/**recently
+  played**/**most played**), a Favorites filter chip, and a manual **Scan
+  library** button (next to search) to re-query `MediaStore` on demand —
+  for when you've dropped new files on the device and don't want to
+  relaunch the app
+- **Library filters** — skip clips shorter than a chosen length (15s–90s,
+  or off) and/or skip anything that looks like a **WhatsApp voice note**
+  (by folder or `PTT-`/`AUD-...-WA` filename pattern — on by default, some
+  devices index these as regular music). Both are in Settings > Library
+  and re-scan the library immediately when changed
 - **Favorites** — heart-toggle on any track, from the library list or Now
   Playing
 - **Playlists** — create, rename, delete, add/remove tracks, play a
   playlist from any track or from the top; persisted locally via DataStore
 - **Now Playing** — seek bar, play/pause, skip, shuffle, repeat
-  (off → all → one), favorite toggle, sleep timer, playback speed
+  (off → all → one), favorite toggle, sleep timer, playback speed, a
+  marquee-scrolling title for long track names, and an **Up next** sheet
+  showing the rest of the current queue (tap any track to jump to it)
 - **Sleep timer** — 15/30/45/60 minutes, pauses playback and counts down
   live; adjustable from Settings or Now Playing's overflow menu
 - **Playback speed** — 0.75x–2x, from Settings or Now Playing
-- **Settings** — theme mode (Vibe/dark default, Light, Follow system),
-  playback speed, sleep timer, about section, and an honest "coming soon"
-  list for what's not built yet
+- **Haptic feedback** on Play/Pause and Favorite, on both the mini player
+  and Now Playing
+- **Settings** — theme mode (dark default/Light/Follow system), 5
+  selectable **color skins** (Vibe Red, Ocean Blue, Emerald Green, Royal
+  Purple, Sunset Amber), font customization (see below), playback speed,
+  sleep timer, mini player color, library filters, about section, and an
+  honest "coming soon" list for what's not built yet
 - Runtime permission handling for `READ_MEDIA_AUDIO` (Android 13+) /
   `READ_EXTERNAL_STORAGE` (older)
-- Branding pulled from the real iSokoVibe logo/brand art (see below), and
-  the app **defaults to the brand's dark red-on-black look** regardless of
-  system theme — Material You dynamic color is intentionally not used, so
-  the app always reads as iSokoVibe rather than tinting to the phone's
-  wallpaper
-- Bundled Roboto (`res/font/`) so text always renders in Roboto instead of
-  whatever an OEM skin substitutes for the system font; every
-  `Typography` role is set explicitly (not just the ones this app touches
-  directly) so buttons/chips/labels get it too
-- Every `ColorScheme` role is set explicitly, not just primary/surface —
-  Material3 auto-derives the roles you leave unset from its purple
-  baseline palette, which is what was leaking through as a lilac tint on
-  selected nav items and chips
+- Branding pulled from the real iSokoVibe logo/brand art (see below); the
+  app **defaults to the brand's dark red-on-black look** regardless of
+  system theme, and Material You dynamic color is intentionally never
+  used for any skin, so the app always reads as itself rather than
+  tinting to the phone's wallpaper
+- **Fonts** — bundled Roboto and Open Sans (both Apache 2.0), so text
+  never falls back to whatever an OEM skin substitutes for the system
+  font. Open Sans is bundled specifically for its Light "book" (300) cut,
+  used on smaller secondary text. Settings > Fonts lets you pick:
+  - **Combination** — Roboto, Roboto + Open Sans (default: Roboto on
+    titles, Open Sans Light on everything smaller), or Open Sans throughout
+  - **Size** — Small/Default/Large, a multiplier over the whole type scale
+  - **Weight** — Light/Default/Bold, shifting the bold-title/light-detail
+    contrast a notch either way
+
+  Every `Typography` role is set explicitly (not just the ones touched
+  directly) so buttons/chips/labels pick up the choice too, and primary
+  text (song/playlist titles) is always bold relative to secondary text
+  (artist, album, counts) regardless of which weight profile is active
+- Every `ColorScheme` role is set explicitly for every skin, not just
+  primary/surface — Material3 auto-derives roles left unset from its
+  purple baseline palette, which is what was leaking through as a lilac
+  tint on selected nav items and chips before this was fixed
 - Instant screen transitions (Compose Navigation's default fade animation
   is disabled) for a snappier feel
-- Mini player gets a Previous button alongside Play/Pause and Next, and
-  its background color is customizable from Settings (a few brand-red/
-  black/white presets)
+- Mini player gets a Previous button alongside Play/Pause and Next, its
+  background color is customizable from Settings (a few brand-red/black/
+  white presets), and the track title marquees when it's too long to fit
+- Margins trimmed down across every screen (search bar, song/playlist
+  rows, Settings sections) so content runs edge-to-edge instead of
+  looking boxed in
 
 ## Ads and push notifications — removed from the app for now
 
@@ -131,25 +156,26 @@ app/src/main/java/com/isokovibe/musicplayer/
 ├── MainActivity.kt          # Compose entry point, bottom-nav + branded chrome, nav host
 ├── MainViewModel.kt         # Library/search/sort/favorites/playlists/playback state
 ├── data/
-│   ├── Song.kt               # Track model
-│   ├── MusicRepository.kt    # MediaStore query
-│   ├── Playlist.kt           # Playlist model (serializable)
-│   ├── SortOption.kt
+│   ├── Song.kt                # Track model
+│   ├── MusicRepository.kt     # MediaStore query — duration filter + WhatsApp voice note detection
+│   ├── Playlist.kt            # Playlist model (serializable)
+│   ├── SortOption.kt          # Title/Artist/Album/Duration/Recently played/Most played
 │   ├── ThemeMode.kt
-│   └── UserDataRepository.kt # DataStore-backed favorites/playlists/theme/mini-player color
+│   ├── AppearanceSettings.kt  # ColorSkin, FontCombination, FontSizeScale, FontWeightPreference, MinTrackDuration
+│   └── UserDataRepository.kt  # DataStore-backed prefs: favorites/playlists/appearance/library filters/play stats
 ├── playback/
-│   ├── MusicService.kt       # MediaSessionService hosting ExoPlayer
-│   └── PlaybackController.kt # MediaController wrapper: queue, speed, sleep timer
+│   ├── MusicService.kt        # MediaSessionService hosting ExoPlayer
+│   └── PlaybackController.kt  # MediaController wrapper: queue, speed, sleep timer
 └── ui/
     ├── LibraryScreen.kt
     ├── PlaylistsScreen.kt
     ├── PlaylistDetailScreen.kt
     ├── SettingsScreen.kt
-    ├── NowPlayingScreen.kt
-    ├── theme/                 # Color.kt, Theme.kt, Type.kt
-    └── components/            # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog
+    ├── NowPlayingScreen.kt       # Includes the "Up next" queue bottom sheet
+    ├── theme/                    # Color.kt (5 skins), Theme.kt (builds ColorScheme per skin), Type.kt (builds Typography)
+    └── components/                # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog
 
-app/src/main/res/font/         # Bundled Roboto TTFs (Apache 2.0)
+app/src/main/res/font/         # Bundled Roboto + Open Sans TTFs (Apache 2.0)
 wordpress-plugin/
 ├── isokovibe-push-notifications/  # Sends a push on publish
 └── isokovibe-custom-ads/          # "App Ads" admin screen + the feed the app polls
@@ -177,7 +203,9 @@ you don't need a local Android SDK to get an installable build.
 3. Home-screen & lock-screen widgets
 4. Android Auto support
 5. Tag/metadata editor
-6. Listening stats / "recently played" smart playlist
+6. Richer listening stats (charts/trends) — basic recently-played/most-played
+   sorting is already shipped, this would be a dedicated stats screen
 7. A-B repeat
 8. M3U playlist import/export
 9. A real Play Store–size (512×512) icon export
+10. Drag-to-reorder in the "Up next" queue sheet (currently tap-to-jump only)

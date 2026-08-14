@@ -4,5 +4,7 @@ enum class SortOption(val label: String) {
     TITLE("Title"),
     ARTIST("Artist"),
     ALBUM("Album"),
-    DURATION("Duration")
+    DURATION("Duration"),
+    RECENTLY_PLAYED("Recently played"),
+    MOST_PLAYED("Most played")
 }

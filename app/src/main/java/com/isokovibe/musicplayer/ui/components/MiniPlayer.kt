@@ -23,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.isokovibe.musicplayer.data.Song
@@ -39,6 +41,7 @@ fun MiniPlayer(
     backgroundColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
+    val haptics = LocalHapticFeedback.current
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -80,7 +83,10 @@ fun MiniPlayer(
             IconButton(onClick = onSkipPrevious) {
                 Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
             }
-            IconButton(onClick = onTogglePlayPause) {
+            IconButton(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onTogglePlayPause()
+            }) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play",

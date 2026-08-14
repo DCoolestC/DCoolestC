@@ -28,6 +28,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,7 +45,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.isokovibe.musicplayer.BuildConfig
 import com.isokovibe.musicplayer.R
+import com.isokovibe.musicplayer.data.ColorSkin
+import com.isokovibe.musicplayer.data.FontCombination
+import com.isokovibe.musicplayer.data.FontSizeScale
+import com.isokovibe.musicplayer.data.FontWeightPreference
+import com.isokovibe.musicplayer.data.MinTrackDuration
 import com.isokovibe.musicplayer.data.ThemeMode
+import com.isokovibe.musicplayer.ui.theme.SkinAmber
+import com.isokovibe.musicplayer.ui.theme.SkinBlue
+import com.isokovibe.musicplayer.ui.theme.SkinGreen
+import com.isokovibe.musicplayer.ui.theme.SkinPurple
 import com.isokovibe.musicplayer.ui.theme.VibeBlack
 import com.isokovibe.musicplayer.ui.theme.VibeRed
 import com.isokovibe.musicplayer.ui.theme.VibeRedDeep
@@ -63,6 +73,13 @@ private val MINI_PLAYER_COLOR_PRESETS: List<Pair<String, Color?>> = listOf(
     "White" to VibeWhite,
     "Light" to VibeSurfaceLight
 )
+private val COLOR_SKIN_SWATCH: Map<ColorSkin, Color> = mapOf(
+    ColorSkin.VIBE_RED to VibeRed,
+    ColorSkin.OCEAN_BLUE to SkinBlue,
+    ColorSkin.EMERALD_GREEN to SkinGreen,
+    ColorSkin.ROYAL_PURPLE to SkinPurple,
+    ColorSkin.SUNSET_AMBER to SkinAmber
+)
 
 @Composable
 fun SettingsScreen(
@@ -72,8 +89,20 @@ fun SettingsScreen(
     onPlaybackSpeedChange: (Float) -> Unit,
     sleepTimerRemainingMs: Long?,
     onSetSleepTimer: (Int) -> Unit,
+    colorSkin: ColorSkin,
+    onColorSkinChange: (ColorSkin) -> Unit,
+    fontCombination: FontCombination,
+    onFontCombinationChange: (FontCombination) -> Unit,
+    fontSizeScale: FontSizeScale,
+    onFontSizeScaleChange: (FontSizeScale) -> Unit,
+    fontWeightPreference: FontWeightPreference,
+    onFontWeightPreferenceChange: (FontWeightPreference) -> Unit,
     miniPlayerColorArgb: Int?,
     onMiniPlayerColorChange: (Int?) -> Unit,
+    minTrackDuration: MinTrackDuration,
+    onMinTrackDurationChange: (MinTrackDuration) -> Unit,
+    excludeWhatsAppVoiceNotes: Boolean,
+    onExcludeWhatsAppVoiceNotesChange: (Boolean) -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -91,6 +120,103 @@ fun SettingsScreen(
                         onClick = { onThemeModeChange(mode) },
                         label = { Text(mode.label) }
                     )
+                }
+            }
+        }
+
+        item { SectionDivider() }
+        item { SectionHeader("Color skin") }
+        item {
+            LazyRow(
+                modifier = Modifier.padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(ColorSkin.entries.toList()) { skin ->
+                    val swatch = COLOR_SKIN_SWATCH.getValue(skin)
+                    val isSelected = colorSkin == skin
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(swatch)
+                                .border(
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.outline,
+                                    shape = CircleShape
+                                )
+                                .clickable { onColorSkinChange(skin) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Icon(Icons.Filled.Check, contentDescription = null, tint = VibeWhite)
+                            }
+                        }
+                        Text(skin.label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
+        }
+
+        item { SectionDivider() }
+        item { SectionHeader("Fonts") }
+        item {
+            Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text(
+                    "Combination",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FontCombination.entries.forEach { combo ->
+                        FilterChip(
+                            selected = fontCombination == combo,
+                            onClick = { onFontCombinationChange(combo) },
+                            label = { Text(combo.label) }
+                        )
+                    }
+                }
+
+                Text(
+                    "Size",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+                Row(
+                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FontSizeScale.entries.forEach { scale ->
+                        FilterChip(
+                            selected = fontSizeScale == scale,
+                            onClick = { onFontSizeScaleChange(scale) },
+                            label = { Text(scale.label) }
+                        )
+                    }
+                }
+
+                Text(
+                    "Weight",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+                Row(
+                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FontWeightPreference.entries.forEach { weight ->
+                        FilterChip(
+                            selected = fontWeightPreference == weight,
+                            onClick = { onFontWeightPreferenceChange(weight) },
+                            label = { Text(weight.label) }
+                        )
+                    }
                 }
             }
         }
@@ -179,6 +305,37 @@ fun SettingsScreen(
         }
 
         item { SectionDivider() }
+        item { SectionHeader("Library") }
+        item {
+            Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text(
+                    "Skip clips shorter than",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MinTrackDuration.entries.forEach { duration ->
+                        FilterChip(
+                            selected = minTrackDuration == duration,
+                            onClick = { onMinTrackDurationChange(duration) },
+                            label = { Text(duration.label) }
+                        )
+                    }
+                }
+                SettingsSwitchRow(
+                    title = "Skip WhatsApp voice notes",
+                    subtitle = "Keeps voice messages/PTT clips out of your library, even if the device tags them as music",
+                    checked = excludeWhatsAppVoiceNotes,
+                    onCheckedChange = onExcludeWhatsAppVoiceNotesChange,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+        }
+
+        item { SectionDivider() }
         item { SectionHeader("Coming soon") }
         items(
             listOf(
@@ -186,8 +343,7 @@ fun SettingsScreen(
                 "Synced lyrics (.lrc)",
                 "Home-screen widgets",
                 "Android Auto",
-                "Tag editor",
-                "Listening stats"
+                "Tag editor"
             )
         ) { feature ->
             Text(
@@ -236,6 +392,26 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

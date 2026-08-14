@@ -43,6 +43,13 @@ class PlaybackController(private val context: Context, private val scope: Corout
     private val _uiState = MutableStateFlow(PlaybackUiState())
     val uiState: StateFlow<PlaybackUiState> = _uiState
 
+    // The songs currently loaded as the playback queue, in order — powers
+    // the Now Playing "Up next" sheet. Not derived from the controller
+    // itself (Media3's MediaItems don't carry the full Song back out), just
+    // snapshotted whenever a new queue is loaded.
+    private val _queue = MutableStateFlow<List<Song>>(emptyList())
+    val queue: StateFlow<List<Song>> = _queue
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _uiState.update { it.copy(isPlaying = isPlaying) }
@@ -93,12 +100,19 @@ class PlaybackController(private val context: Context, private val scope: Corout
 
     /** Loads [songs] as the playback queue and starts playing at [startIndex]. */
     fun playQueue(songs: List<Song>, startIndex: Int) {
+        _queue.value = songs
         val items = songs.map(::toMediaItem)
         controller?.apply {
             setMediaItems(items, startIndex, 0L)
             prepare()
             play()
         }
+    }
+
+    /** Jumps straight to [index] within the currently loaded queue — what
+     *  tapping a song in the "Up next" sheet does. */
+    fun playFromQueue(index: Int) {
+        controller?.seekTo(index, 0L)
     }
 
     fun togglePlayPause() {

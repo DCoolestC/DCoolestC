@@ -3,6 +3,11 @@ package com.isokovibe.musicplayer
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.isokovibe.musicplayer.data.ColorSkin
+import com.isokovibe.musicplayer.data.FontCombination
+import com.isokovibe.musicplayer.data.FontSizeScale
+import com.isokovibe.musicplayer.data.FontWeightPreference
+import com.isokovibe.musicplayer.data.MinTrackDuration
 import com.isokovibe.musicplayer.data.MusicRepository
 import com.isokovibe.musicplayer.data.Playlist
 import com.isokovibe.musicplayer.data.Song
@@ -16,6 +21,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -51,10 +58,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userData.playlists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val themeMode: StateFlow<ThemeMode> =
         userData.themeMode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
+    val colorSkin: StateFlow<ColorSkin> =
+        userData.colorSkin.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ColorSkin.VIBE_RED)
+    val fontCombination: StateFlow<FontCombination> =
+        userData.fontCombination.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FontCombination.ROBOTO_OPEN_SANS)
+    val fontSizeScale: StateFlow<FontSizeScale> =
+        userData.fontSizeScale.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FontSizeScale.DEFAULT)
+    val fontWeightPreference: StateFlow<FontWeightPreference> =
+        userData.fontWeightPreference.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FontWeightPreference.DEFAULT)
     val miniPlayerColor: StateFlow<Int?> =
         userData.miniPlayerColor.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val minTrackDuration: StateFlow<MinTrackDuration> =
+        userData.minTrackDuration.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MinTrackDuration.OFF)
+    val excludeWhatsAppVoiceNotes: StateFlow<Boolean> =
+        userData.excludeWhatsAppVoiceNotes.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
+    val queue: StateFlow<List<Song>> = playback.queue
 
     private data class FilterInputs(
         val allSongs: List<Song>,
@@ -64,13 +84,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val favorites: Set<Long>
     )
 
+    private data class PlayStats(val counts: Map<Long, Int>, val lastPlayed: Map<Long, Long>)
+
     private val filterInputs = combine(
         _allSongs, _searchQuery, _sortOption, _showFavoritesOnly, favorites
     ) { all, query, sort, favOnly, favs -> FilterInputs(all, query, sort, favOnly, favs) }
 
+    private val playStats = combine(userData.playCounts, userData.lastPlayed) { counts, last -> PlayStats(counts, last) }
+
     val libraryUiState: StateFlow<LibraryUiState> = combine(
-        filterInputs, _isLoading, _permissionRequired
-    ) { inputs, loading, permissionRequired ->
+        filterInputs, _isLoading, _permissionRequired, playStats
+    ) { inputs, loading, permissionRequired, stats ->
         val filtered = inputs.allSongs
             .filter { !inputs.favoritesOnly || it.id in inputs.favorites }
             .filter {
@@ -85,6 +109,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     SortOption.ARTIST -> list.sortedBy { it.artist.lowercase() }
                     SortOption.ALBUM -> list.sortedBy { it.album.lowercase() }
                     SortOption.DURATION -> list.sortedByDescending { it.durationMs }
+                    SortOption.RECENTLY_PLAYED -> list.sortedByDescending { stats.lastPlayed[it.id] ?: 0L }
+                    SortOption.MOST_PLAYED -> list.sortedByDescending { stats.counts[it.id] ?: 0 }
                 }
             }
         LibraryUiState(isLoading = loading, permissionRequired = permissionRequired, songs = filtered)
@@ -92,6 +118,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         playback.connect()
+        // One place to record a play, regardless of whether it came from a
+        // manual tap, a skip, or the queue auto-advancing.
+        viewModelScope.launch {
+            playbackState.map { it.currentSongId }.distinctUntilChanged().collect { id ->
+                if (id != null) userData.recordPlay(id)
+            }
+        }
     }
 
     fun onPermissionGranted() {
@@ -105,12 +138,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading.value = false
     }
 
-    /** Re-scans MediaStore for tracks — the manual "Scan library" action, and what happens on first permission grant. */
-    fun rescanLibrary() {
+    /** Re-scans MediaStore for tracks — the manual "Scan library" action, and what happens on first
+     *  permission grant or a change to the library filter settings. */
+    fun rescanLibrary(
+        minDurationSeconds: Int = minTrackDuration.value.seconds,
+        excludeWhatsApp: Boolean = excludeWhatsAppVoiceNotes.value
+    ) {
         if (!permissionGranted) return
         viewModelScope.launch {
             _isLoading.value = true
-            _allSongs.value = repository.loadLibrary()
+            _allSongs.value = repository.loadLibrary(minDurationSeconds * 1000L, excludeWhatsApp)
             _isLoading.value = false
         }
     }
@@ -139,6 +176,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playback.playQueue(songs, startIndex)
     }
 
+    /** Jumps to [index] in the currently loaded queue — used by the Now Playing "Up next" sheet. */
+    fun playFromQueue(index: Int) = playback.playFromQueue(index)
+
     fun togglePlayPause() = playback.togglePlayPause()
     fun skipToNext() = playback.skipToNext()
     fun skipToPrevious() = playback.skipToPrevious()
@@ -156,7 +196,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleFavorite(songId: Long) = viewModelScope.launch { userData.toggleFavorite(songId) }
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch { userData.setThemeMode(mode) }
+    fun setColorSkin(skin: ColorSkin) = viewModelScope.launch { userData.setColorSkin(skin) }
+    fun setFontCombination(combination: FontCombination) = viewModelScope.launch { userData.setFontCombination(combination) }
+    fun setFontSizeScale(scale: FontSizeScale) = viewModelScope.launch { userData.setFontSizeScale(scale) }
+    fun setFontWeightPreference(preference: FontWeightPreference) =
+        viewModelScope.launch { userData.setFontWeightPreference(preference) }
     fun setMiniPlayerColor(colorArgb: Int?) = viewModelScope.launch { userData.setMiniPlayerColor(colorArgb) }
+
+    fun setMinTrackDuration(duration: MinTrackDuration) = viewModelScope.launch {
+        userData.setMinTrackDuration(duration)
+        rescanLibrary(minDurationSeconds = duration.seconds)
+    }
+
+    fun setExcludeWhatsAppVoiceNotes(exclude: Boolean) = viewModelScope.launch {
+        userData.setExcludeWhatsAppVoiceNotes(exclude)
+        rescanLibrary(excludeWhatsApp = exclude)
+    }
+
     fun createPlaylist(name: String) = viewModelScope.launch { userData.createPlaylist(name) }
     fun deletePlaylist(id: String) = viewModelScope.launch { userData.deletePlaylist(id) }
     fun renamePlaylist(id: String, name: String) = viewModelScope.launch { userData.renamePlaylist(id, name) }

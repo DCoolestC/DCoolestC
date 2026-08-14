@@ -13,7 +13,17 @@ import kotlinx.coroutines.withContext
  */
 class MusicRepository(private val context: Context) {
 
-    suspend fun loadLibrary(): List<Song> = withContext(Dispatchers.IO) {
+    /**
+     * @param minDurationMs tracks shorter than this are skipped entirely —
+     *   the "skip short clips" library setting. 0 disables the filter.
+     * @param excludeWhatsAppVoiceNotes skips anything that looks like a
+     *   WhatsApp voice note (by folder or filename pattern), even if the
+     *   device miscategorized it as music.
+     */
+    suspend fun loadLibrary(
+        minDurationMs: Long = 0L,
+        excludeWhatsAppVoiceNotes: Boolean = true
+    ): List<Song> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<Song>()
 
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -23,7 +33,9 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DURATION
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.DISPLAY_NAME
         )
         // Only real, non-trashed music tracks — filters out ringtones/notifications/etc.
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -37,8 +49,21 @@ class MusicRepository(private val context: Context) {
                 val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
                 val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                // DATA is deprecated but still populated for query results on every API
+                // level this app supports; DISPLAY_NAME is the modern equivalent for the
+                // filename alone. Guarded with getColumnIndex (not OrThrow) since not
+                // every device/URI combination is guaranteed to return them.
+                val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                val nameCol = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME)
 
                 while (cursor.moveToNext()) {
+                    val durationMs = cursor.getLong(durationCol)
+                    if (durationMs < minDurationMs) continue
+
+                    val path = if (dataCol >= 0) cursor.getString(dataCol) else null
+                    val displayName = if (nameCol >= 0) cursor.getString(nameCol) else null
+                    if (excludeWhatsAppVoiceNotes && isWhatsAppVoiceNote(path, displayName)) continue
+
                     val id = cursor.getLong(idCol)
                     val albumId = cursor.getLong(albumIdCol)
                     val contentUri = ContentUris.withAppendedId(collection, id)
@@ -52,7 +77,7 @@ class MusicRepository(private val context: Context) {
                         title = cursor.getString(titleCol) ?: "Unknown title",
                         artist = cursor.getString(artistCol) ?: "Unknown artist",
                         album = cursor.getString(albumCol) ?: "Unknown album",
-                        durationMs = cursor.getLong(durationCol),
+                        durationMs = durationMs,
                         contentUri = contentUri,
                         albumArtUri = albumArtUri
                     )
@@ -60,5 +85,20 @@ class MusicRepository(private val context: Context) {
             }
 
         songs
+    }
+
+    /**
+     * Heuristic match for WhatsApp voice notes: either the file lives under
+     * a "WhatsApp ... Voice Note(s)" folder, or its name follows WhatsApp's
+     * own PTT-/AUD-...-WA naming convention. Some devices index these as
+     * regular music, which is exactly what this is meant to catch.
+     */
+    private fun isWhatsAppVoiceNote(path: String?, displayName: String?): Boolean {
+        val lowerPath = path?.lowercase().orEmpty()
+        val lowerName = displayName?.lowercase().orEmpty()
+        val inWhatsAppVoiceFolder = lowerPath.contains("whatsapp") && lowerPath.contains("voice note")
+        val looksLikeVoiceNoteFile = lowerName.startsWith("ptt-") ||
+            (lowerName.startsWith("aud-") && lowerName.contains("-wa"))
+        return inWhatsAppVoiceFolder || (lowerPath.contains("whatsapp") && looksLikeVoiceNoteFile)
     }
 }

@@ -1,5 +1,8 @@
 package com.isokovibe.musicplayer.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,6 +21,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
@@ -31,12 +36,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +51,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import com.isokovibe.musicplayer.data.Song
@@ -54,12 +64,13 @@ import com.isokovibe.musicplayer.ui.components.AlbumArt
 private val SLEEP_TIMER_OPTIONS = listOf(0, 15, 30, 45, 60)
 private val PLAYBACK_SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun NowPlayingScreen(
     song: Song?,
     playback: PlaybackUiState,
     isFavorite: Boolean,
+    queue: List<Song>,
     onTogglePlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
@@ -69,11 +80,14 @@ fun NowPlayingScreen(
     onToggleFavorite: () -> Unit,
     onSetPlaybackSpeed: (Float) -> Unit,
     onSetSleepTimer: (Int) -> Unit,
+    onQueueItemClick: (Int) -> Unit,
     onBack: () -> Unit
 ) {
+    val haptics = LocalHapticFeedback.current
     var menuExpanded by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -86,12 +100,20 @@ fun NowPlayingScreen(
                 },
                 actions = {
                     if (song != null) {
-                        IconButton(onClick = onToggleFavorite) {
+                        IconButton(onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleFavorite()
+                        }) {
                             Icon(
                                 imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                                 contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
                                 tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
+                        }
+                    }
+                    if (queue.isNotEmpty()) {
+                        IconButton(onClick = { showQueueSheet = true }) {
+                            Icon(Icons.Filled.QueueMusic, contentDescription = "Up next")
                         }
                     }
                     IconButton(onClick = { menuExpanded = true }) {
@@ -133,7 +155,12 @@ fun NowPlayingScreen(
                 text = song?.title ?: "Nothing playing",
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 24.dp)
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp)
+                    .basicMarquee()
             )
             Text(
                 text = song?.artist ?: "",
@@ -179,7 +206,10 @@ fun NowPlayingScreen(
                     )
                 }
                 Surface(
-                    onClick = onTogglePlayPause,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onTogglePlayPause()
+                    },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(64.dp)
@@ -251,6 +281,54 @@ fun NowPlayingScreen(
             confirmButton = {},
             dismissButton = { TextButton(onClick = { showSpeedDialog = false }) { Text("Cancel") } }
         )
+    }
+
+    if (showQueueSheet) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { showQueueSheet = false },
+            sheetState = sheetState
+        ) {
+            Text(
+                "Up next",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                items(queue.size) { index ->
+                    val queuedSong = queue[index]
+                    val isCurrent = queuedSong.id == song?.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onQueueItemClick(index)
+                                showQueueSheet = false
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AlbumArt(uri = queuedSong.albumArtUri, modifier = Modifier.size(40.dp))
+                        Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                            Text(
+                                queuedSong.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                queuedSong.artist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
