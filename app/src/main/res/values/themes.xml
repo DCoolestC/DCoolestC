@@ -1,3 +1,10 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.IsokoVibe" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Pre-Compose window theme; only visible for the first frame before
+         setContent() takes over, so it just needs to roughly match the
+         brand instead of flashing default Material white. -->
+    <style name="Theme.IsokoVibe" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/isokovibe_black</item>
+        <item name="android:colorBackground">@color/isokovibe_black</item>
+        <item name="android:colorAccent">@color/isokovibe_red</item>
+    </style>
 </resources>

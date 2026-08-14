@@ -2,11 +2,19 @@ package com.isokovibe.musicplayer.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// iSokoVibe palette — deep indigo night with a warm marketplace-gold accent.
-val VibePrimary = Color(0xFF6C3CE9)
-val VibePrimaryDark = Color(0xFFB79CFF)
-val VibeAccent = Color(0xFFF2B84B)
-val VibeBackground = Color(0xFFFDFBFF)
-val VibeBackgroundDark = Color(0xFF14102B)
-val VibeSurfaceDark = Color(0xFF1F1A3D)
-val VibeOnDark = Color(0xFFEDE9FF)
+// Sampled directly from the iSokoVibe.com.ng logo and brand art —
+// bold red on black, the way the site presents itself.
+val VibeRed = Color(0xFFD50000)       // circle in the "iSo" mark
+val VibeRedBright = Color(0xFFFF0008) // headphone band / notes accent
+val VibeRedDeep = Color(0xFFAA0000)   // promo-art background red
+val VibeBlack = Color(0xFF000000)     // icon background
+val VibeWhite = Color(0xFFFFFFFF)
+
+val VibeSurfaceDark = Color(0xFF161616)
+val VibeSurfaceVariantDark = Color(0xFF262626)
+val VibeOutlineDark = Color(0xFF3D3D3D)
+
+val VibeBackgroundLight = Color(0xFFFFFFFF)
+val VibeSurfaceLight = Color(0xFFF7F5F5)
+val VibeSurfaceVariantLight = Color(0xFFEDE3E3)
+val VibeOutlineLight = Color(0xFFD8CACA)

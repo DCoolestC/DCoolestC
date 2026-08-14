@@ -17,8 +17,34 @@ Media3 (ExoPlayer).
     skip, shuffle, and repeat (off → all → one)
 - Runtime permission handling for `READ_MEDIA_AUDIO` (Android 13+) /
   `READ_EXTERNAL_STORAGE` (older)
-- Material You dynamic color on Android 12+, with a custom
-  indigo/gold "vibe" palette as the fallback theme
+- Branding pulled from the real iSokoVibe logo/brand art (see below) —
+  the app intentionally does **not** use Material You dynamic color, so
+  it always reads as iSokoVibe rather than tinting to the phone's
+  wallpaper
+
+## Branding
+
+iSokoVibe.com.ng was unreachable from the sandbox this was built in (the
+environment's network egress is allowlisted and the domain wasn't on it),
+so the palette and launcher icon were built directly from the logo/brand
+art files provided in chat, with colors sampled pixel-for-pixel rather
+than eyeballed:
+
+| Token | Hex | Sampled from |
+|---|---|---|
+| `VibeRed` | `#D50000` | the circle in the "iSo" mark |
+| `VibeRedBright` | `#FF0008` | headphone band / music notes in the promo art |
+| `VibeRedDeep` | `#AA0000` | promo-art background red |
+| `VibeBlack` | `#000000` | icon background |
+
+The launcher icon (`mipmap-anydpi-v26/ic_launcher.xml` + per-density
+PNGs) is generated straight from the provided logo file — a solid black
+adaptive background with the logo inset as the foreground layer, checked
+against a worst-case circular mask so nothing gets clipped. If the actual
+website turns out to use a different palette or wordmark, swap
+`app/src/main/java/com/isokovibe/musicplayer/ui/theme/Color.kt` and the
+`mipmap-*/ic_launcher_foreground.png` assets — everything else reads from
+those.
 
 ## Project layout
 
