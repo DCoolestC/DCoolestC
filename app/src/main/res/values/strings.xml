@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">iSokoVibe Music Player</string>
+    <string name="permission_rationale">iSokoVibe needs access to your music library to find songs on this device.</string>
+    <string name="grant_permission">Grant access</string>
+    <string name="empty_library_title">No songs found</string>
+    <string name="empty_library_subtitle">Add some music to your device to get started.</string>
+    <string name="now_playing">Now Playing</string>
+    <string name="your_library">Your Library</string>
+    <string name="playlists">Playlists</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple soundwave / music-note mark, inset for the adaptive-icon safe zone -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,30 v40 a8,8 0 1,1 -6,-7.75 V38 l24,-6 v34.25 a8,8 0 1,1 -6,-7.75 V30 Z" />
+    <path
+        android:fillColor="#F2B84B"
+        android:pathData="M62,44 v8 M74,36 v24 M86,44 v8"
+        android:strokeColor="#F2B84B"
+        android:strokeWidth="6"
+        android:strokeLineCap="round" />
+</vector>

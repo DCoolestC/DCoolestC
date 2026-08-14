@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude playback state/cache from backup; playlists could be included later. -->
+</full-backup-content>
