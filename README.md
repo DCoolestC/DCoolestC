@@ -53,15 +53,70 @@ Media3 (ExoPlayer).
 - Mini player gets a Previous button alongside Play/Pause and Next, and
   its background color is customizable from Settings (a few brand-red/
   black/white presets)
-- Sticky footer ad banner (Google AdMob), with a Settings toggle and an
-  editable ad unit ID — ships with Google's official test ad unit by
-  default so it builds and shows test ads out of the box; swap in a real
-  AdMob ad unit ID once there's an AdMob account behind it
+- Sticky footer ad slot with **two ad sources**, in priority order:
+  1. **Your own ads** — local business / affiliate banners you manage
+     yourself via the iSokoVibe Custom Ads WordPress plugin (see "Ads
+     setup" below). No app rebuild needed to add/change/remove one.
+  2. **AdMob** — falls back to this when you have no ads of your own
+     configured. Ships with Google's official test ad unit by default so
+     it builds and shows test ads out of the box; swap in a real AdMob
+     ad unit ID from Settings once there's an AdMob account behind it.
 - Push notifications for new iSokoVibe.com.ng content — code is fully
   wired (Android FCM client + topic subscription + a WordPress plugin
   that sends the push when a post is published), waiting only on
   `app/google-services.json` from your Firebase project. See
   "Push notifications setup" below.
+
+## Ads setup
+
+Two independent ad sources share one footer slot — your own ads win
+whenever there's at least one, AdMob is the fallback.
+
+### Your own ads (local/affiliate)
+
+1. Install the plugin in `wordpress-plugin/isokovibe-custom-ads/` on
+   iSokoVibe.com.ng (same install steps as the push-notifications
+   plugin — zip and upload, or FTP, then activate).
+2. In wp-admin, a new **App Ads** menu appears. Add New Ad → set the
+   featured image to the banner graphic, fill in the click-through URL,
+   optionally flag it "Sponsored" (do this for affiliate links — most
+   affiliate programs require the disclosure), publish.
+3. That's it — every app install picks it up automatically (polled on
+   launch, cached for offline use). Settings → Your own ads shows how
+   many are currently loaded, with a manual Refresh button and an
+   editable feed URL if you ever move the site.
+4. To stop showing an ad, switch it to Draft in WordPress — no app-side
+   action needed.
+
+Full details, including what makes an ad "ready" to show, are in that
+folder's README.
+
+### AdMob (to make it show real, paying ads)
+
+Right now the app ships with **Google's official test ad unit**, so
+what you see in test builds are Google's sample ads, not real ones —
+this is intentional (lets the banner work out of the box without an
+AdMob account, and avoids accidentally serving live ads from a dev
+build). To switch to real ads:
+
+1. Create an account at [admob.google.com](https://admob.google.com/)
+   if you don't have one, and add an app for iSokoVibe Music Player
+   (package name `com.isokovibe.musicplayer`). AdMob doesn't require a
+   Play Store listing to generate IDs, though full ad serving/payouts
+   typically expect one eventually.
+2. Create a **Banner** ad unit under that app — this gives you an ad
+   unit ID like `ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY`.
+3. In the app: **Settings → AdMob**, paste that ID into "AdMob ad unit
+   ID" and save. No rebuild needed — this part is a runtime setting.
+4. The **App ID** (a separate, app-level identifier — different from
+   the ad unit ID) is still Google's test one, hardcoded in
+   `AndroidManifest.xml`. This one *does* need a rebuild: send me your
+   real AdMob App ID (`ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY`, note
+   the `~` not `/`) and I'll swap it in.
+5. "Manage it easily" day-to-day: Settings → AdMob has the on/off
+   toggle and the ad unit ID field — no code changes needed for either.
+   Everything else (impressions, revenue, payment threshold) is managed
+   from the AdMob console itself, same as any AdMob-integrated app.
 
 ## Push notifications setup
 
@@ -157,9 +212,11 @@ app/src/main/java/com/isokovibe/musicplayer/
 │   ├── Song.kt               # Track model
 │   ├── MusicRepository.kt    # MediaStore query
 │   ├── Playlist.kt           # Playlist model (serializable)
+│   ├── CustomAd.kt           # Your-own-ads model (serializable)
+│   ├── CustomAdsRepository.kt # Fetches the ads feed from WordPress
 │   ├── SortOption.kt
 │   ├── ThemeMode.kt
-│   └── UserDataRepository.kt # DataStore-backed favorites/playlists/theme
+│   └── UserDataRepository.kt # DataStore-backed favorites/playlists/theme/ad prefs
 ├── playback/
 │   ├── MusicService.kt       # MediaSessionService hosting ExoPlayer
 │   └── PlaybackController.kt # MediaController wrapper: queue, speed, sleep timer
@@ -173,10 +230,13 @@ app/src/main/java/com/isokovibe/musicplayer/
     ├── SettingsScreen.kt
     ├── NowPlayingScreen.kt
     ├── theme/                 # Color.kt, Theme.kt, Type.kt
-    └── components/            # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog, BannerAdView
+    └── components/            # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog,
+                                # BannerAdView (AdMob), CustomAdCarousel (your own ads)
 
 app/src/main/res/font/         # Bundled Roboto TTFs (Apache 2.0)
-wordpress-plugin/isokovibe-push-notifications/  # Sends the push on publish
+wordpress-plugin/
+├── isokovibe-push-notifications/  # Sends a push on publish
+└── isokovibe-custom-ads/          # "App Ads" admin screen + the feed the app polls
 ```
 
 ## Building

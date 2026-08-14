@@ -34,6 +34,9 @@ class UserDataRepository(private val context: Context) {
         val SHOW_ADS = booleanPreferencesKey("show_ads")
         val AD_UNIT_ID = stringPreferencesKey("ad_unit_id")
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val USE_CUSTOM_ADS = booleanPreferencesKey("use_custom_ads")
+        val CUSTOM_ADS_FEED_URL = stringPreferencesKey("custom_ads_feed_url")
+        val CUSTOM_ADS_CACHE = stringPreferencesKey("custom_ads_cache")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -73,6 +76,20 @@ class UserDataRepository(private val context: Context) {
         prefs[Keys.NOTIFICATIONS_ENABLED] ?: false
     }
 
+    /** Prefer the operator's own ads (from [customAdsFeedUrl]) over the AdMob banner when both are available. */
+    val useCustomAds: Flow<Boolean> = context.userDataStore.data.map { prefs -> prefs[Keys.USE_CUSTOM_ADS] ?: true }
+
+    val customAdsFeedUrl: Flow<String> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.CUSTOM_ADS_FEED_URL]?.takeIf { it.isNotBlank() } ?: DEFAULT_CUSTOM_ADS_FEED_URL
+    }
+
+    /** Last successfully fetched custom ads, so they still show (stale) if a device is briefly offline. */
+    val cachedCustomAds: Flow<List<CustomAd>> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.CUSTOM_ADS_CACHE]?.let { raw ->
+            runCatching { json.decodeFromString<List<CustomAd>>(raw) }.getOrNull()
+        } ?: emptyList()
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.userDataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
@@ -97,6 +114,18 @@ class UserDataRepository(private val context: Context) {
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.userDataStore.edit { it[Keys.NOTIFICATIONS_ENABLED] = enabled }
+    }
+
+    suspend fun setUseCustomAds(enabled: Boolean) {
+        context.userDataStore.edit { it[Keys.USE_CUSTOM_ADS] = enabled }
+    }
+
+    suspend fun setCustomAdsFeedUrl(url: String) {
+        context.userDataStore.edit { it[Keys.CUSTOM_ADS_FEED_URL] = url }
+    }
+
+    suspend fun cacheCustomAds(ads: List<CustomAd>) {
+        context.userDataStore.edit { it[Keys.CUSTOM_ADS_CACHE] = json.encodeToString(ads) }
     }
 
     suspend fun toggleFavorite(songId: Long) {

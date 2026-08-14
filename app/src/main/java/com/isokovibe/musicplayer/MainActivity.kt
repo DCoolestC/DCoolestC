@@ -43,6 +43,7 @@ import com.isokovibe.musicplayer.ui.PlaylistsScreen
 import com.isokovibe.musicplayer.ui.SettingsScreen
 import com.isokovibe.musicplayer.ui.components.BannerAdView
 import com.isokovibe.musicplayer.ui.components.BrandTopBar
+import com.isokovibe.musicplayer.ui.components.CustomAdCarousel
 import com.isokovibe.musicplayer.ui.components.MiniPlayer
 import com.isokovibe.musicplayer.ui.theme.IsokoVibeTheme
 
@@ -101,6 +102,10 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val showAds by viewModel.showAds.collectAsState()
     val adUnitId by viewModel.adUnitId.collectAsState()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
+    val useCustomAds by viewModel.useCustomAds.collectAsState()
+    val customAdsFeedUrl by viewModel.customAdsFeedUrl.collectAsState()
+    val customAds by viewModel.customAds.collectAsState()
+    val customAdsError by viewModel.customAdsError.collectAsState()
     val currentSong = viewModel.songById(playbackState.currentSongId)
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -144,8 +149,12 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                             label = { Text("Settings") }
                         )
                     }
-                    // Sticky footer ad banner, pinned below the tab bar.
-                    if (showAds) {
+                    // Sticky footer ad slot, pinned below the tab bar — the
+                    // operator's own ads win when there are any, AdMob is
+                    // the fallback.
+                    if (useCustomAds && customAds.isNotEmpty()) {
+                        CustomAdCarousel(ads = customAds)
+                    } else if (showAds) {
                         BannerAdView(adUnitId = adUnitId)
                     }
                 }
@@ -208,6 +217,13 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onAdUnitIdChange = viewModel::setAdUnitId,
                     notificationsEnabled = notificationsEnabled,
                     onNotificationsEnabledChange = viewModel::setNotificationsEnabled,
+                    useCustomAds = useCustomAds,
+                    onUseCustomAdsChange = viewModel::setUseCustomAds,
+                    customAdsFeedUrl = customAdsFeedUrl,
+                    onCustomAdsFeedUrlChange = viewModel::setCustomAdsFeedUrl,
+                    customAdsCount = customAds.size,
+                    customAdsError = customAdsError,
+                    onRefreshCustomAds = viewModel::refreshCustomAds,
                     contentPadding = padding
                 )
             }

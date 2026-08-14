@@ -90,6 +90,13 @@ fun SettingsScreen(
     onAdUnitIdChange: (String) -> Unit,
     notificationsEnabled: Boolean,
     onNotificationsEnabledChange: (Boolean) -> Unit,
+    useCustomAds: Boolean,
+    onUseCustomAdsChange: (Boolean) -> Unit,
+    customAdsFeedUrl: String,
+    onCustomAdsFeedUrlChange: (String) -> Unit,
+    customAdsCount: Int,
+    customAdsError: String?,
+    onRefreshCustomAds: () -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -211,12 +218,58 @@ fun SettingsScreen(
         }
 
         item { SectionDivider() }
-        item { SectionHeader("Ads") }
+        item { SectionHeader("Your own ads") }
+        item {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                SettingsSwitchRow(
+                    title = "Show my own ads",
+                    subtitle = "Local business / affiliate banners, managed from iSokoVibe.com.ng — takes priority over AdMob below when there's at least one",
+                    checked = useCustomAds,
+                    onCheckedChange = onUseCustomAdsChange
+                )
+                if (useCustomAds) {
+                    var editedFeedUrl by remember(customAdsFeedUrl) { mutableStateOf(customAdsFeedUrl) }
+                    OutlinedTextField(
+                        value = editedFeedUrl,
+                        onValueChange = { editedFeedUrl = it },
+                        label = { Text("Ads feed URL") },
+                        supportingText = { Text("The iSokoVibe Custom Ads WordPress plugin's endpoint.") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    )
+                    Row(
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onCustomAdsFeedUrlChange(editedFeedUrl.trim()) },
+                            enabled = editedFeedUrl.isNotBlank() && editedFeedUrl != customAdsFeedUrl
+                        ) { Text("Save") }
+                        Button(onClick = onRefreshCustomAds) { Text("Refresh now") }
+                    }
+                    Text(
+                        when {
+                            customAdsError != null -> "Couldn't load ads: $customAdsError"
+                            customAdsCount == 0 -> "No ads loaded yet — add some from wp-admin → App Ads on iSokoVibe.com.ng, or Refresh above if you just added one."
+                            else -> "$customAdsCount ad${if (customAdsCount == 1) "" else "s"} loaded."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (customAdsError != null) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        }
+
+        item { SectionDivider() }
+        item { SectionHeader("AdMob") }
         item {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 SettingsSwitchRow(
                     title = "Show ad banner",
-                    subtitle = "Sticky banner at the bottom of the app",
+                    subtitle = "Sticky banner at the bottom of the app — used when there's no ad of your own to show",
                     checked = showAds,
                     onCheckedChange = onShowAdsChange
                 )

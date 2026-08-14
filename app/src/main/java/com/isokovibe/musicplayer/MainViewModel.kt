@@ -3,6 +3,9 @@ package com.isokovibe.musicplayer
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.isokovibe.musicplayer.data.CustomAd
+import com.isokovibe.musicplayer.data.CustomAdsRepository
+import com.isokovibe.musicplayer.data.DEFAULT_CUSTOM_ADS_FEED_URL
 import com.isokovibe.musicplayer.data.MusicRepository
 import com.isokovibe.musicplayer.data.Playlist
 import com.isokovibe.musicplayer.data.Song
@@ -18,6 +21,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,6 +35,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = MusicRepository(application)
     private val userData = UserDataRepository(application)
+    private val customAdsRepository = CustomAdsRepository()
     private val playback = PlaybackController(application, viewModelScope)
 
     private val _allSongs = MutableStateFlow<List<Song>>(emptyList())
@@ -62,6 +67,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userData.adUnitId.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TEST_BANNER_AD_UNIT_ID)
     val notificationsEnabled: StateFlow<Boolean> =
         userData.notificationsEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val useCustomAds: StateFlow<Boolean> =
+        userData.useCustomAds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val customAdsFeedUrl: StateFlow<String> =
+        userData.customAdsFeedUrl.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_CUSTOM_ADS_FEED_URL)
+
+    private val _customAds = MutableStateFlow<List<CustomAd>>(emptyList())
+    val customAds: StateFlow<List<CustomAd>> = _customAds.asStateFlow()
+    private val _customAdsError = MutableStateFlow<String?>(null)
+    val customAdsError: StateFlow<String?> = _customAdsError.asStateFlow()
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
 
@@ -105,6 +119,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // preference, including on cold start (e.g. after a reinstall).
         viewModelScope.launch {
             userData.notificationsEnabled.collect { enabled -> PushNotificationManager.setSubscribed(enabled) }
+        }
+        viewModelScope.launch {
+            _customAds.value = userData.cachedCustomAds.first() // show cached ads instantly, then refresh
+            refreshCustomAds()
+        }
+    }
+
+    /** Re-fetches the operator's own ads from WordPress. Safe to call anytime — failures are silent. */
+    fun refreshCustomAds() {
+        viewModelScope.launch {
+            val feedUrl = userData.customAdsFeedUrl.first()
+            val result = runCatching { customAdsRepository.fetchAds(feedUrl) }
+            result.onSuccess { ads ->
+                _customAds.value = ads
+                _customAdsError.value = null
+                userData.cacheCustomAds(ads)
+            }.onFailure { error ->
+                _customAdsError.value = error.message ?: "Couldn't load ads"
+            }
         }
     }
 
@@ -168,6 +201,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setShowAds(enabled: Boolean) = viewModelScope.launch { userData.setShowAds(enabled) }
     fun setAdUnitId(id: String) = viewModelScope.launch { userData.setAdUnitId(id) }
     fun setNotificationsEnabled(enabled: Boolean) = viewModelScope.launch { userData.setNotificationsEnabled(enabled) }
+    fun setUseCustomAds(enabled: Boolean) = viewModelScope.launch { userData.setUseCustomAds(enabled) }
+    fun setCustomAdsFeedUrl(url: String) = viewModelScope.launch {
+        userData.setCustomAdsFeedUrl(url)
+        refreshCustomAds()
+    }
     fun createPlaylist(name: String) = viewModelScope.launch { userData.createPlaylist(name) }
     fun deletePlaylist(id: String) = viewModelScope.launch { userData.deletePlaylist(id) }
     fun renamePlaylist(id: String, name: String) = viewModelScope.launch { userData.renamePlaylist(id, name) }
