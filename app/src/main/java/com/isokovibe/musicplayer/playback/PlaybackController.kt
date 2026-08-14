@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -24,7 +25,9 @@ data class PlaybackUiState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,
-    @Player.RepeatMode val repeatMode: Int = Player.REPEAT_MODE_OFF
+    @Player.RepeatMode val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val playbackSpeed: Float = 1f,
+    val sleepTimerRemainingMs: Long? = null
 )
 
 /**
@@ -35,6 +38,7 @@ class PlaybackController(private val context: Context, private val scope: Corout
 
     private var controller: MediaController? = null
     private var positionJob: Job? = null
+    private var sleepTimerJob: Job? = null
 
     private val _uiState = MutableStateFlow(PlaybackUiState())
     val uiState: StateFlow<PlaybackUiState> = _uiState
@@ -61,6 +65,10 @@ class PlaybackController(private val context: Context, private val scope: Corout
         override fun onRepeatModeChanged(repeatMode: Int) {
             _uiState.update { it.copy(repeatMode = repeatMode) }
         }
+
+        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+            _uiState.update { it.copy(playbackSpeed = playbackParameters.speed) }
+        }
     }
 
     fun connect(onReady: () -> Unit = {}) {
@@ -77,6 +85,7 @@ class PlaybackController(private val context: Context, private val scope: Corout
 
     fun release() {
         positionJob?.cancel()
+        sleepTimerJob?.cancel()
         controller?.removeListener(playerListener)
         controller?.release()
         controller = null
@@ -116,6 +125,38 @@ class PlaybackController(private val context: Context, private val scope: Corout
             else -> Player.REPEAT_MODE_OFF
         }
         controller?.repeatMode = next
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        controller?.setPlaybackSpeed(speed)
+        _uiState.update { it.copy(playbackSpeed = speed) }
+    }
+
+    /** Pauses playback after [minutes]. Pass 0 or less to cancel an active timer. */
+    fun startSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            _uiState.update { it.copy(sleepTimerRemainingMs = null) }
+            return
+        }
+        val endAtMs = System.currentTimeMillis() + minutes * 60_000L
+        sleepTimerJob = scope.launch {
+            while (isActive) {
+                val remaining = endAtMs - System.currentTimeMillis()
+                if (remaining <= 0) {
+                    controller?.pause()
+                    _uiState.update { it.copy(sleepTimerRemainingMs = null) }
+                    break
+                }
+                _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
+                delay(1000)
+            }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        _uiState.update { it.copy(sleepTimerRemainingMs = null) }
     }
 
     private fun startPositionUpdates() {

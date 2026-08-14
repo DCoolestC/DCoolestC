@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import com.isokovibe.musicplayer.data.ThemeMode
 
 private val LightColors = lightColorScheme(
     primary = VibeRed,
@@ -42,12 +43,19 @@ private val DarkColors = darkColorScheme(
  * iSokoVibe's brand identity is bold red on black/white — deliberately not
  * derived from Material You/dynamic color, so the app always reads as
  * iSokoVibe rather than tinting itself to whatever wallpaper the phone has.
+ * Defaults to the brand's dark look regardless of system setting; users can
+ * switch to Light or Follow System in Settings.
  */
 @Composable
 fun IsokoVibeTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.DARK,
     content: @Composable () -> Unit
 ) {
+    val darkTheme = when (themeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
     val colorScheme = if (darkTheme) DarkColors else LightColors
 
     MaterialTheme(

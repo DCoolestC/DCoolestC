@@ -4,51 +4,129 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.isokovibe.musicplayer.data.MusicRepository
+import com.isokovibe.musicplayer.data.Playlist
 import com.isokovibe.musicplayer.data.Song
+import com.isokovibe.musicplayer.data.SortOption
+import com.isokovibe.musicplayer.data.ThemeMode
+import com.isokovibe.musicplayer.data.UserDataRepository
 import com.isokovibe.musicplayer.playback.PlaybackController
 import com.isokovibe.musicplayer.playback.PlaybackUiState
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-sealed interface LibraryState {
-    data object Loading : LibraryState
-    data object PermissionRequired : LibraryState
-    data object Empty : LibraryState
-    data class Loaded(val songs: List<Song>) : LibraryState
-}
+data class LibraryUiState(
+    val isLoading: Boolean = true,
+    val permissionRequired: Boolean = false,
+    val songs: List<Song> = emptyList()
+)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = MusicRepository(application)
+    private val userData = UserDataRepository(application)
     private val playback = PlaybackController(application, viewModelScope)
 
-    private val _libraryState = MutableStateFlow<LibraryState>(LibraryState.Loading)
-    val libraryState: StateFlow<LibraryState> = _libraryState
+    private val _allSongs = MutableStateFlow<List<Song>>(emptyList())
+    val allSongs: StateFlow<List<Song>> = _allSongs.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(true)
+    private val _permissionRequired = MutableStateFlow(false)
+    private val _searchQuery = MutableStateFlow("")
+    private val _sortOption = MutableStateFlow(SortOption.TITLE)
+    private val _showFavoritesOnly = MutableStateFlow(false)
+
+    val searchQuery: StateFlow<String> = _searchQuery
+    val sortOption: StateFlow<SortOption> = _sortOption
+    val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly
+
+    val favorites: StateFlow<Set<Long>> =
+        userData.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+    val playlists: StateFlow<List<Playlist>> =
+        userData.playlists.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val themeMode: StateFlow<ThemeMode> =
+        userData.themeMode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.DARK)
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
 
-    private var library: List<Song> = emptyList()
+    private data class FilterInputs(
+        val allSongs: List<Song>,
+        val query: String,
+        val sort: SortOption,
+        val favoritesOnly: Boolean,
+        val favorites: Set<Long>
+    )
+
+    private val filterInputs = combine(
+        _allSongs, _searchQuery, _sortOption, _showFavoritesOnly, favorites
+    ) { all, query, sort, favOnly, favs -> FilterInputs(all, query, sort, favOnly, favs) }
+
+    val libraryUiState: StateFlow<LibraryUiState> = combine(
+        filterInputs, _isLoading, _permissionRequired
+    ) { inputs, loading, permissionRequired ->
+        val filtered = inputs.allSongs
+            .filter { !inputs.favoritesOnly || it.id in inputs.favorites }
+            .filter {
+                inputs.query.isBlank() ||
+                    it.title.contains(inputs.query, ignoreCase = true) ||
+                    it.artist.contains(inputs.query, ignoreCase = true) ||
+                    it.album.contains(inputs.query, ignoreCase = true)
+            }
+            .let { list ->
+                when (inputs.sort) {
+                    SortOption.TITLE -> list.sortedBy { it.title.lowercase() }
+                    SortOption.ARTIST -> list.sortedBy { it.artist.lowercase() }
+                    SortOption.ALBUM -> list.sortedBy { it.album.lowercase() }
+                    SortOption.DURATION -> list.sortedByDescending { it.durationMs }
+                }
+            }
+        LibraryUiState(isLoading = loading, permissionRequired = permissionRequired, songs = filtered)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryUiState())
 
     init {
         playback.connect()
     }
 
     fun onPermissionGranted() {
+        _permissionRequired.value = false
         viewModelScope.launch {
-            _libraryState.value = LibraryState.Loading
-            library = repository.loadLibrary()
-            _libraryState.value = if (library.isEmpty()) LibraryState.Empty else LibraryState.Loaded(library)
+            _isLoading.value = true
+            _allSongs.value = repository.loadLibrary()
+            _isLoading.value = false
         }
     }
 
     fun onPermissionDenied() {
-        _libraryState.value = LibraryState.PermissionRequired
+        _permissionRequired.value = true
+        _isLoading.value = false
     }
 
-    fun playSong(song: Song) {
-        val index = library.indexOf(song).coerceAtLeast(0)
-        playback.playQueue(library, index)
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun setSortOption(option: SortOption) {
+        _sortOption.value = option
+    }
+
+    fun setShowFavoritesOnly(show: Boolean) {
+        _showFavoritesOnly.value = show
+    }
+
+    fun playSong(song: Song, queue: List<Song> = libraryUiState.value.songs) {
+        val index = queue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        playback.playQueue(queue, index)
+    }
+
+    fun playPlaylist(playlist: Playlist, startSongId: Long? = null) {
+        val songs = playlist.songIds.mapNotNull { id -> _allSongs.value.firstOrNull { it.id == id } }
+        if (songs.isEmpty()) return
+        val startIndex = startSongId?.let { id -> songs.indexOfFirst { it.id == id } }?.coerceAtLeast(0) ?: 0
+        playback.playQueue(songs, startIndex)
     }
 
     fun togglePlayPause() = playback.togglePlayPause()
@@ -57,8 +135,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
     fun toggleShuffle() = playback.toggleShuffle()
     fun cycleRepeatMode() = playback.cycleRepeatMode()
+    fun setPlaybackSpeed(speed: Float) = playback.setPlaybackSpeed(speed)
+    fun startSleepTimer(minutes: Int) = playback.startSleepTimer(minutes)
+    fun cancelSleepTimer() = playback.cancelSleepTimer()
 
-    fun songById(id: Long?): Song? = library.firstOrNull { it.id == id }
+    fun songById(id: Long?): Song? = _allSongs.value.firstOrNull { it.id == id }
+
+    fun songsForPlaylist(playlist: Playlist): List<Song> =
+        playlist.songIds.mapNotNull { id -> _allSongs.value.firstOrNull { it.id == id } }
+
+    fun toggleFavorite(songId: Long) = viewModelScope.launch { userData.toggleFavorite(songId) }
+    fun setThemeMode(mode: ThemeMode) = viewModelScope.launch { userData.setThemeMode(mode) }
+    fun createPlaylist(name: String) = viewModelScope.launch { userData.createPlaylist(name) }
+    fun deletePlaylist(id: String) = viewModelScope.launch { userData.deletePlaylist(id) }
+    fun renamePlaylist(id: String, name: String) = viewModelScope.launch { userData.renamePlaylist(id, name) }
+    fun addSongToPlaylist(playlistId: String, songId: Long) =
+        viewModelScope.launch { userData.addSongToPlaylist(playlistId, songId) }
+    fun removeSongFromPlaylist(playlistId: String, songId: Long) =
+        viewModelScope.launch { userData.removeSongFromPlaylist(playlistId, songId) }
+
+    fun createPlaylistAndAddSong(name: String, songId: Long) = viewModelScope.launch {
+        val created = userData.createPlaylist(name)
+        userData.addSongToPlaylist(created.id, songId)
+    }
 
     override fun onCleared() {
         playback.release()

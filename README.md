@@ -3,24 +3,64 @@
 A local music player for Android, built with Kotlin, Jetpack Compose, and
 Media3 (ExoPlayer).
 
-## What's in this MVP
+## What's implemented
 
 - Scans the device's music library via `MediaStore` (no network, no
   external catalog)
 - Background playback through a `MediaSessionService`, so audio keeps
   playing when the app isn't in the foreground, with lock-screen /
   notification / Bluetooth controls handled automatically by Media3
-- Compose UI:
-  - **Library** — scrollable list of every track on the device
-  - **Mini player** — docked at the bottom while browsing
-  - **Now Playing** — full-screen player with seek bar, play/pause,
-    skip, shuffle, and repeat (off → all → one)
+- Persistent branded chrome — a top bar with the iSokoVibe mark + name on
+  every top-level screen, bottom navigation (Library / Playlists /
+  Settings), and a docked mini player — so the brand is visible everywhere,
+  not just on one screen
+- Branded album-art fallback: a music-note tile instead of a blank square
+  when a track has no usable embedded art (the legacy
+  `content://media/external/audio/albumart` URI Android hands back often
+  fails to resolve, so this is the common case, not the exception)
+- **Library** — search, sort (title/artist/album/duration), and a
+  Favorites filter chip, on top of the scrollable track list
+- **Favorites** — heart-toggle on any track, from the library list or Now
+  Playing
+- **Playlists** — create, rename, delete, add/remove tracks, play a
+  playlist from any track or from the top; persisted locally via DataStore
+- **Now Playing** — seek bar, play/pause, skip, shuffle, repeat
+  (off → all → one), favorite toggle, sleep timer, playback speed
+- **Sleep timer** — 15/30/45/60 minutes, pauses playback and counts down
+  live; adjustable from Settings or Now Playing's overflow menu
+- **Playback speed** — 0.75x–2x, from Settings or Now Playing
+- **Settings** — theme mode (Vibe/dark default, Light, Follow system),
+  playback speed, sleep timer, about section, and an honest "coming soon"
+  list for what's not built yet
 - Runtime permission handling for `READ_MEDIA_AUDIO` (Android 13+) /
   `READ_EXTERNAL_STORAGE` (older)
-- Branding pulled from the real iSokoVibe logo/brand art (see below) —
-  the app intentionally does **not** use Material You dynamic color, so
-  it always reads as iSokoVibe rather than tinting to the phone's
+- Branding pulled from the real iSokoVibe logo/brand art (see below), and
+  the app **defaults to the brand's dark red-on-black look** regardless of
+  system theme — Material You dynamic color is intentionally not used, so
+  the app always reads as iSokoVibe rather than tinting to the phone's
   wallpaper
+
+## Deferred — needs device-level testing to get right
+
+These didn't make this pass because they need real hardware/emulator
+verification I can't safely fake from a CI-only build loop — shipping a
+silently-broken version would be worse than being upfront that they're not
+done yet:
+
+- **Equalizer / bass boost / ReplayGain** — requires wiring
+  `android.media.audiofx.Equalizer` to the ExoPlayer instance's audio
+  session *across* the `MediaController`/`MediaSession` process boundary
+  (a custom session command, since the base `Player` API doesn't expose
+  `audioSessionId`). Architecturally straightforward but easy to get
+  subtly wrong in a way that only shows up on a real device.
+- **Synced lyrics (`.lrc`)**
+- **Home-screen / lock-screen widgets** (Glance)
+- **Android Auto** (the `MediaSessionService` groundwork is already in
+  place for this)
+- **Tag/metadata editor**
+- **Listening stats**
+- **A-B repeat**
+- A real Play Store–size (512×512) icon export
 
 ## Branding
 
@@ -40,29 +80,40 @@ than eyeballed:
 The launcher icon (`mipmap-anydpi-v26/ic_launcher.xml` + per-density
 PNGs) is generated straight from the provided logo file — a solid black
 adaptive background with the logo inset as the foreground layer, checked
-against a worst-case circular mask so nothing gets clipped. If the actual
-website turns out to use a different palette or wordmark, swap
-`app/src/main/java/com/isokovibe/musicplayer/ui/theme/Color.kt` and the
-`mipmap-*/ic_launcher_foreground.png` assets — everything else reads from
-those.
+against a worst-case circular mask so nothing gets clipped. A separate,
+tightly-cropped copy (`drawable-nodpi/ic_isokovibe_logo.png`) is used for
+the in-app top bar and Settings' about section, since the adaptive-icon
+foreground has masking padding baked in that makes it look too small at
+badge size.
+
+If the actual website turns out to use a different palette or wordmark,
+swap `app/src/main/java/com/isokovibe/musicplayer/ui/theme/Color.kt` and
+the logo PNGs — everything else reads from those.
 
 ## Project layout
 
 ```
 app/src/main/java/com/isokovibe/musicplayer/
-├── MainActivity.kt         # Compose entry point, nav host, permission gate
-├── MainViewModel.kt        # Bridges library state + playback state to the UI
+├── MainActivity.kt          # Compose entry point, bottom-nav + branded chrome, nav host
+├── MainViewModel.kt         # Library/search/sort/favorites/playlists/playback state
 ├── data/
-│   ├── Song.kt              # Track model
-│   └── MusicRepository.kt   # MediaStore query
+│   ├── Song.kt               # Track model
+│   ├── MusicRepository.kt    # MediaStore query
+│   ├── Playlist.kt           # Playlist model (serializable)
+│   ├── SortOption.kt
+│   ├── ThemeMode.kt
+│   └── UserDataRepository.kt # DataStore-backed favorites/playlists/theme
 ├── playback/
-│   ├── MusicService.kt      # MediaSessionService hosting ExoPlayer
-│   └── PlaybackController.kt# MediaController wrapper exposed as StateFlow
+│   ├── MusicService.kt       # MediaSessionService hosting ExoPlayer
+│   └── PlaybackController.kt # MediaController wrapper: queue, speed, sleep timer
 └── ui/
     ├── LibraryScreen.kt
+    ├── PlaylistsScreen.kt
+    ├── PlaylistDetailScreen.kt
+    ├── SettingsScreen.kt
     ├── NowPlayingScreen.kt
-    ├── theme/                # Color.kt, Theme.kt, Type.kt
-    └── components/MiniPlayer.kt
+    ├── theme/                 # Color.kt, Theme.kt, Type.kt
+    └── components/            # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog
 ```
 
 ## Building
@@ -76,27 +127,18 @@ gradle wrapper --gradle-version 8.7   # one-time, generates gradlew
 ./gradlew assembleDebug
 ```
 
-> **Note:** this scaffold was generated in a sandboxed environment without
-> network access to Google's Maven repository (`dl.google.com`) or an
-> installed Android SDK, so the build could not be compiled/verified here.
-> Open it in Android Studio (or CI with normal network access) to resolve
-> dependencies and confirm it builds — the code follows standard,
-> well-established Media3 + Compose patterns, but please do a first build
-> before relying on it.
+CI (`.github/workflows/build-apk.yml`) builds a debug APK on every push
+to a `claude/**` or `main` branch and publishes it to a GitHub Release, so
+you don't need a local Android SDK to get an installable build.
 
 ## Roadmap / suggested next steps
 
-Roughly in priority order — see the feature discussion in this PR/commit
-for the fuller list:
-
-1. Playlists (create/edit, M3U import-export) + favorites
-2. Search/filter and sort options (artist, album, genre, recently added)
-3. Equalizer + ReplayGain volume normalization
-4. Sleep timer, playback speed, A-B repeat
-5. Lyrics (`.lrc` sync)
-6. Home-screen & lock-screen widgets
-7. Android Auto support (the `MediaSessionService` groundwork is already
-   in place for this)
-8. Tag/metadata editor
-9. Listening stats / "recently played" smart playlist
-10. Actual launcher icon artwork (the current one is a placeholder vector)
+1. Equalizer + ReplayGain volume normalization
+2. Synced lyrics (`.lrc`)
+3. Home-screen & lock-screen widgets
+4. Android Auto support
+5. Tag/metadata editor
+6. Listening stats / "recently played" smart playlist
+7. A-B repeat
+8. M3U playlist import/export
+9. A real Play Store–size (512×512) icon export
