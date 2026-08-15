@@ -38,6 +38,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.isokovibe.musicplayer.data.GroupType
+import com.isokovibe.musicplayer.data.SmartPlaylist
+import com.isokovibe.musicplayer.ui.DuplicatesScreen
 import com.isokovibe.musicplayer.ui.GroupDetailScreen
 import com.isokovibe.musicplayer.ui.LibraryScreen
 import com.isokovibe.musicplayer.ui.NowPlayingScreen
@@ -62,6 +64,10 @@ private fun playlistDetailRoute(id: String) = "playlist_detail/$id"
 private const val ROUTE_GROUP_DETAIL = "group/{type}/{key}"
 private fun groupDetailRoute(type: GroupType, key: String) =
     "group/${type.name}/${Uri.encode(key)}"
+
+private const val ROUTE_SMART_PLAYLIST = "smart/{kind}"
+private fun smartPlaylistRoute(kind: SmartPlaylist) = "smart/${kind.name}"
+private const val ROUTE_DUPLICATES = "duplicates"
 
 class MainActivity : ComponentActivity() {
 
@@ -127,6 +133,9 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val libraryTab by viewModel.libraryTab.collectAsState()
     val libraryGroups by viewModel.libraryGroups.collectAsState()
     val albumGridView by viewModel.albumGridView.collectAsState()
+    val excludedFolders by viewModel.excludedFolders.collectAsState()
+    val smartPlaylistCounts by viewModel.smartPlaylistCounts.collectAsState()
+    val duplicateGroups by viewModel.duplicateGroups.collectAsState()
     val currentSong = viewModel.songById(playbackState.currentSongId)
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -219,12 +228,15 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onFolderClick = {
                         navController.navigate(groupDetailRoute(GroupType.FOLDER, it.path))
                     },
+                    onExcludeFolder = { viewModel.toggleExcludedFolder(it.path) },
                     contentPadding = padding
                 )
             }
             composable(ROUTE_PLAYLISTS) {
                 PlaylistsScreen(
                     playlists = playlists,
+                    smartPlaylistCounts = smartPlaylistCounts,
+                    onSmartPlaylistClick = { navController.navigate(smartPlaylistRoute(it)) },
                     onPlaylistClick = { navController.navigate(playlistDetailRoute(it.id)) },
                     onCreatePlaylist = viewModel::createPlaylist,
                     contentPadding = padding
@@ -252,6 +264,10 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onMinTrackDurationChange = viewModel::setMinTrackDuration,
                     excludeWhatsAppVoiceNotes = excludeWhatsAppVoiceNotes,
                     onExcludeWhatsAppVoiceNotesChange = viewModel::setExcludeWhatsAppVoiceNotes,
+                    excludedFolders = excludedFolders,
+                    onRemoveExcludedFolder = viewModel::toggleExcludedFolder,
+                    duplicateCount = duplicateGroups.size,
+                    onOpenDuplicates = { navController.navigate(ROUTE_DUPLICATES) },
                     contentPadding = padding
                 )
             }
@@ -316,6 +332,37 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                         onBack = { navController.popBackStack() }
                     )
                 }
+            }
+            composable(
+                ROUTE_SMART_PLAYLIST,
+                arguments = listOf(navArgument("kind") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val kind = backStackEntry.arguments?.getString("kind")
+                    ?.let { name -> runCatching { SmartPlaylist.valueOf(name) }.getOrNull() }
+                if (kind != null) {
+                    // Resolved here rather than held in state: these lists are
+                    // defined by their rule, so recomputing on entry is what
+                    // keeps them honest after plays/favourites change.
+                    val smartSongs = viewModel.smartPlaylistSongs(kind)
+                    GroupDetailScreen(
+                        title = kind.label,
+                        subtitle = if (smartSongs.size == 1) "1 track" else "${smartSongs.size} tracks",
+                        songs = smartSongs,
+                        favorites = favorites,
+                        onSongClick = { song -> viewModel.playSongs(smartSongs, song.id) },
+                        onPlayAll = { viewModel.playSongs(smartSongs) },
+                        onShuffle = { viewModel.shuffleSongs(smartSongs) },
+                        onToggleFavorite = viewModel::toggleFavorite,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            composable(ROUTE_DUPLICATES) {
+                DuplicatesScreen(
+                    duplicates = duplicateGroups,
+                    onSongClick = { song -> viewModel.playSongs(listOf(song)) },
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(ROUTE_NOW_PLAYING) {
                 NowPlayingScreen(

@@ -17,8 +17,12 @@ import com.isokovibe.musicplayer.data.Song
 import com.isokovibe.musicplayer.data.SortOption
 import com.isokovibe.musicplayer.data.ThemeMode
 import com.isokovibe.musicplayer.data.UserDataRepository
+import com.isokovibe.musicplayer.data.DuplicateGroup
+import com.isokovibe.musicplayer.data.SmartPlaylist
 import com.isokovibe.musicplayer.data.buildGroups
+import com.isokovibe.musicplayer.data.findDuplicates
 import com.isokovibe.musicplayer.data.matching
+import com.isokovibe.musicplayer.data.resolveSmartPlaylist
 import com.isokovibe.musicplayer.data.songsIn
 import com.isokovibe.musicplayer.playback.PlaybackController
 import com.isokovibe.musicplayer.playback.PlaybackUiState
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -93,9 +98,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userData.minTrackDuration.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MinTrackDuration.OFF)
     val excludeWhatsAppVoiceNotes: StateFlow<Boolean> =
         userData.excludeWhatsAppVoiceNotes.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val excludedFolders: StateFlow<Set<String>> =
+        userData.excludedFolders.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+    val playCounts: StateFlow<Map<Long, Int>> =
+        userData.playCounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    val lastPlayed: StateFlow<Map<Long, Long>> =
+        userData.lastPlayed.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
     val queue: StateFlow<List<Song>> = playback.queue
+
+    /** How many tracks each smart playlist currently resolves to, for the
+     *  subtitles on the Playlists screen. Derived once per library/stats
+     *  change rather than recomputed during composition. */
+    val smartPlaylistCounts: StateFlow<Map<SmartPlaylist, Int>> =
+        combine(_allSongs, playCounts, lastPlayed, favorites) { songs, counts, last, favs ->
+            SmartPlaylist.entries.associateWith { kind ->
+                resolveSmartPlaylist(kind, songs, counts, last, favs).size
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val duplicateGroups: StateFlow<List<DuplicateGroup>> =
+        _allSongs.map { it.findDuplicates() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private data class FilterInputs(
         val allSongs: List<Song>,
@@ -111,7 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _allSongs, _searchQuery, _sortOption, _showFavoritesOnly, favorites
     ) { all, query, sort, favOnly, favs -> FilterInputs(all, query, sort, favOnly, favs) }
 
-    private val playStats = combine(userData.playCounts, userData.lastPlayed) { counts, last -> PlayStats(counts, last) }
+    private val playStats = combine(playCounts, lastPlayed) { counts, last -> PlayStats(counts, last) }
 
     val libraryUiState: StateFlow<LibraryUiState> = combine(
         filterInputs, _isLoading, _permissionRequired, playStats
@@ -161,14 +186,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Re-scans MediaStore for tracks — the manual "Scan library" action, and what happens on first
      *  permission grant or a change to the library filter settings. */
-    fun rescanLibrary(
-        minDurationSeconds: Int = minTrackDuration.value.seconds,
-        excludeWhatsApp: Boolean = excludeWhatsAppVoiceNotes.value
-    ) {
+    fun rescanLibrary() {
         if (!permissionGranted) return
         viewModelScope.launch {
             _isLoading.value = true
-            _allSongs.value = repository.loadLibrary(minDurationSeconds * 1000L, excludeWhatsApp)
+            // Read the persisted values directly rather than the StateFlow
+            // snapshots. Those start at their defaults and only catch up once
+            // DataStore has emitted, so a cold-start scan used to run with
+            // default filters and silently ignore the user's saved settings.
+            // Reading here also means the setters below just write and
+            // re-scan, with no stale-value window in between.
+            _allSongs.value = repository.loadLibrary(
+                minDurationMs = userData.minTrackDuration.first().seconds * 1000L,
+                excludeWhatsAppVoiceNotes = userData.excludeWhatsAppVoiceNotes.first(),
+                excludedFolders = userData.excludedFolders.first()
+            )
             _isLoading.value = false
         }
     }
@@ -196,9 +228,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Tracks inside one album/artist/genre/folder, for its detail screen. */
     fun songsInGroup(type: GroupType, key: String): List<Song> = _allSongs.value.songsIn(type, key)
 
-    /** Plays a whole group, optionally starting from one track within it. */
-    fun playGroup(type: GroupType, key: String, startSongId: Long? = null) {
-        val songs = songsInGroup(type, key)
+    /** Plays an arbitrary list in the order given, optionally starting partway in. */
+    fun playSongs(songs: List<Song>, startSongId: Long? = null) {
         if (songs.isEmpty()) return
         val startIndex = startSongId
             ?.let { id -> songs.indexOfFirst { it.id == id }.takeIf { i -> i >= 0 } }
@@ -206,11 +237,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playback.playQueue(songs, startIndex)
     }
 
-    /** Plays a group in shuffled order, starting from a random track. */
-    fun shuffleGroup(type: GroupType, key: String) {
-        val songs = songsInGroup(type, key)
+    fun shuffleSongs(songs: List<Song>) {
         if (songs.isEmpty()) return
         playback.playQueue(songs.shuffled(), 0)
+    }
+
+    fun playGroup(type: GroupType, key: String, startSongId: Long? = null) =
+        playSongs(songsInGroup(type, key), startSongId)
+
+    fun shuffleGroup(type: GroupType, key: String) = shuffleSongs(songsInGroup(type, key))
+
+    /**
+     * Resolves a smart playlist against the current library and stats.
+     * Read from the StateFlow snapshots rather than collected, since this is
+     * called from composition on demand rather than driving a subscription.
+     */
+    fun smartPlaylistSongs(kind: SmartPlaylist): List<Song> = resolveSmartPlaylist(
+        kind = kind,
+        songs = _allSongs.value,
+        playCounts = playCounts.value,
+        lastPlayed = lastPlayed.value,
+        favorites = favorites.value
+    )
+
+
+    fun toggleExcludedFolder(path: String) = viewModelScope.launch {
+        userData.toggleExcludedFolder(path)
+        rescanLibrary()
     }
 
     fun playSong(song: Song, queue: List<Song> = libraryUiState.value.songs) {
@@ -252,14 +305,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { userData.setFontWeightPreference(preference) }
     fun setMiniPlayerColor(colorArgb: Int?) = viewModelScope.launch { userData.setMiniPlayerColor(colorArgb) }
 
+    // Each of these writes first and then re-scans; because the write
+    // suspends until it's committed, the scan reads back the new value.
     fun setMinTrackDuration(duration: MinTrackDuration) = viewModelScope.launch {
         userData.setMinTrackDuration(duration)
-        rescanLibrary(minDurationSeconds = duration.seconds)
+        rescanLibrary()
     }
 
     fun setExcludeWhatsAppVoiceNotes(exclude: Boolean) = viewModelScope.launch {
         userData.setExcludeWhatsAppVoiceNotes(exclude)
-        rescanLibrary(excludeWhatsApp = exclude)
+        rescanLibrary()
     }
 
     fun createPlaylist(name: String) = viewModelScope.launch { userData.createPlaylist(name) }

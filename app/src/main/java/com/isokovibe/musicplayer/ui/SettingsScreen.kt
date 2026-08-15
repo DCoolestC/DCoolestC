@@ -24,11 +24,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -44,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.isokovibe.musicplayer.BuildConfig
 import com.isokovibe.musicplayer.R
@@ -106,6 +110,10 @@ fun SettingsScreen(
     onMinTrackDurationChange: (MinTrackDuration) -> Unit,
     excludeWhatsAppVoiceNotes: Boolean,
     onExcludeWhatsAppVoiceNotesChange: (Boolean) -> Unit,
+    excludedFolders: Set<String>,
+    onRemoveExcludedFolder: (String) -> Unit,
+    duplicateCount: Int,
+    onOpenDuplicates: () -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -347,6 +355,67 @@ fun SettingsScreen(
                     onCheckedChange = onExcludeWhatsAppVoiceNotesChange,
                     modifier = Modifier.padding(top = 16.dp)
                 )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenDuplicates() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Find duplicates", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            if (duplicateCount == 0) "Nothing appears twice in your library"
+                            else "$duplicateCount ${if (duplicateCount == 1) "track appears" else "tracks appear"} more than once",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Text(
+                    "Hidden folders",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                if (excludedFolders.isEmpty()) {
+                    Text(
+                        "None. Use the eye icon on the Library's Folders tab to hide one.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
+                } else {
+                    excludedFolders.sorted().forEach { path ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                path,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { onRemoveExcludedFolder(path) }) {
+                                Icon(
+                                    Icons.Filled.Visibility,
+                                    contentDescription = "Show this folder again",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 

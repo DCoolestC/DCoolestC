@@ -33,6 +33,7 @@ class UserDataRepository(private val context: Context) {
         val MINI_PLAYER_COLOR = intPreferencesKey("mini_player_color")
         val MIN_TRACK_DURATION = stringPreferencesKey("min_track_duration")
         val EXCLUDE_WHATSAPP_VOICE_NOTES = booleanPreferencesKey("exclude_whatsapp_voice_notes")
+        val EXCLUDED_FOLDERS = stringPreferencesKey("excluded_folders")
         val PLAY_COUNTS = stringPreferencesKey("play_counts")
         val LAST_PLAYED = stringPreferencesKey("last_played")
     }
@@ -88,6 +89,13 @@ class UserDataRepository(private val context: Context) {
         prefs[Keys.EXCLUDE_WHATSAPP_VOICE_NOTES] ?: true
     }
 
+    /** Absolute directory paths kept out of the library entirely. */
+    val excludedFolders: Flow<Set<String>> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.EXCLUDED_FOLDERS]?.let { raw ->
+            runCatching { json.decodeFromString<List<String>>(raw).toSet() }.getOrNull()
+        } ?: emptySet()
+    }
+
     val playCounts: Flow<Map<Long, Int>> = context.userDataStore.data.map { prefs ->
         prefs[Keys.PLAY_COUNTS]?.let { raw ->
             runCatching { json.decodeFromString<Map<Long, Int>>(raw) }.getOrNull()
@@ -132,6 +140,17 @@ class UserDataRepository(private val context: Context) {
 
     suspend fun setExcludeWhatsAppVoiceNotes(exclude: Boolean) {
         context.userDataStore.edit { it[Keys.EXCLUDE_WHATSAPP_VOICE_NOTES] = exclude }
+    }
+
+    /** Adds [path] to the exclusion list, or removes it if already there. */
+    suspend fun toggleExcludedFolder(path: String) {
+        context.userDataStore.edit { prefs ->
+            val current = prefs[Keys.EXCLUDED_FOLDERS]?.let {
+                runCatching { json.decodeFromString<List<String>>(it).toMutableSet() }.getOrNull()
+            } ?: mutableSetOf()
+            if (!current.add(path)) current.remove(path)
+            prefs[Keys.EXCLUDED_FOLDERS] = json.encodeToString(current.toList())
+        }
     }
 
     suspend fun toggleFavorite(songId: Long) {

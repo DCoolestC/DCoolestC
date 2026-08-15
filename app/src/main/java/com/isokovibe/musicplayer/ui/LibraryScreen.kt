@@ -96,6 +96,7 @@ fun LibraryScreen(
     onArtistClick: (ArtistGroup) -> Unit,
     onGenreClick: (GenreGroup) -> Unit,
     onFolderClick: (FolderGroup) -> Unit,
+    onExcludeFolder: (FolderGroup) -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     var songForPlaylistPicker by remember { mutableStateOf<Song?>(null) }
@@ -159,6 +160,7 @@ fun LibraryScreen(
             libraryTab == LibraryTab.FOLDERS -> FolderListView(
                 folders = groups.folders,
                 onFolderClick = onFolderClick,
+                onExcludeFolder = onExcludeFolder,
                 contentPadding = listPadding,
                 modifier = Modifier.weight(1f)
             )

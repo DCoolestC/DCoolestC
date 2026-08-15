@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -174,6 +176,7 @@ fun GenreListView(
 fun FolderListView(
     folders: List<FolderGroup>,
     onFolderClick: (FolderGroup) -> Unit,
+    onExcludeFolder: (FolderGroup) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
@@ -188,7 +191,16 @@ fun FolderListView(
                 subtitle = "${trackLabel(folder.trackCount)} · ${folder.path}",
                 artUri = null,
                 fallbackIcon = Icons.Filled.Folder,
-                onClick = { onFolderClick(folder) }
+                onClick = { onFolderClick(folder) },
+                trailing = {
+                    IconButton(onClick = { onExcludeFolder(folder) }) {
+                        Icon(
+                            Icons.Filled.VisibilityOff,
+                            contentDescription = "Hide this folder from the library",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             )
         }
     }
@@ -200,7 +212,8 @@ private fun BrowseRow(
     subtitle: String,
     artUri: android.net.Uri?,
     fallbackIcon: ImageVector,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -238,6 +251,7 @@ private fun BrowseRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
+        trailing?.invoke()
     }
 }
 
