@@ -33,6 +33,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -115,6 +116,12 @@ fun SettingsScreen(
     duplicateCount: Int,
     onOpenDuplicates: () -> Unit,
     onOpenEqualizer: () -> Unit,
+    remoteUpdatesEnabled: Boolean,
+    onRemoteUpdatesEnabledChange: (Boolean) -> Unit,
+    showRemoteBanners: Boolean,
+    onShowRemoteBannersChange: (Boolean) -> Unit,
+    appConfigUrl: String,
+    onAppConfigUrlChange: (String) -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -442,6 +449,45 @@ fun SettingsScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        item { SectionDivider() }
+        item { SectionHeader("iSokoVibe.com.ng") }
+        item {
+            Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+                SettingsSwitchRow(
+                    title = "News & update alerts",
+                    subtitle = "Announcements about new releases, and a prompt when a newer app version is out",
+                    checked = remoteUpdatesEnabled,
+                    onCheckedChange = onRemoteUpdatesEnabledChange
+                )
+                SettingsSwitchRow(
+                    title = "Show promo banners",
+                    subtitle = "The sponsored strip at the top and bottom of the app",
+                    checked = showRemoteBanners,
+                    onCheckedChange = onShowRemoteBannersChange,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                if (remoteUpdatesEnabled) {
+                    var editedUrl by remember(appConfigUrl) { mutableStateOf(appConfigUrl) }
+                    OutlinedTextField(
+                        value = editedUrl,
+                        onValueChange = { editedUrl = it },
+                        label = { Text("App config URL") },
+                        supportingText = {
+                            Text("The iSokoVibe App Control plugin's endpoint. Only change this if the site moves.")
+                        },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                    )
+                    Button(
+                        onClick = { onAppConfigUrlChange(editedUrl.trim()) },
+                        enabled = editedUrl.isNotBlank() && editedUrl != appConfigUrl,
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) { Text("Save & refresh") }
                 }
             }
         }

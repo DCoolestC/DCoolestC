@@ -119,5 +119,10 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
+    // Periodic background check for announcements from iSokoVibe.com.ng.
+    // No HTTP client dependency alongside it — the fetch is one small GET
+    // via HttpURLConnection, which doesn't justify pulling in OkHttp.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

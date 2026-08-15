@@ -11,8 +11,13 @@ import com.isokovibe.musicplayer.data.GroupType
 import com.isokovibe.musicplayer.data.LibraryGroups
 import com.isokovibe.musicplayer.data.LibraryTab
 import com.isokovibe.musicplayer.data.MinTrackDuration
+import com.isokovibe.musicplayer.data.DEFAULT_APP_CONFIG_URL
 import com.isokovibe.musicplayer.data.MusicRepository
 import com.isokovibe.musicplayer.data.Playlist
+import com.isokovibe.musicplayer.data.RemoteAppVersion
+import com.isokovibe.musicplayer.data.RemoteBanner
+import com.isokovibe.musicplayer.data.RemoteConfig
+import com.isokovibe.musicplayer.data.RemoteConfigRepository
 import com.isokovibe.musicplayer.data.Song
 import com.isokovibe.musicplayer.data.SortOption
 import com.isokovibe.musicplayer.data.ThemeMode
@@ -30,6 +35,7 @@ import com.isokovibe.musicplayer.playback.AudioEngine
 import com.isokovibe.musicplayer.playback.EqualizerCapabilities
 import com.isokovibe.musicplayer.playback.PlaybackController
 import com.isokovibe.musicplayer.playback.PlaybackUiState
+import com.isokovibe.musicplayer.remote.AnnouncementWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -72,6 +78,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = MusicRepository(application)
     private val userData = UserDataRepository(application)
+    private val remoteConfig = RemoteConfigRepository()
     private val playback = PlaybackController(application, viewModelScope)
 
     private val _allSongs = MutableStateFlow<List<Song>>(emptyList())
@@ -139,6 +146,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** What this specific device's equalizer supports — band count and
      *  frequencies vary by hardware, so the UI is built from this. */
     val equalizerCapabilities: StateFlow<EqualizerCapabilities> = AudioEngine.capabilities
+
+    val appConfigUrl: StateFlow<String> =
+        userData.appConfigUrl.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_APP_CONFIG_URL)
+    val remoteUpdatesEnabled: StateFlow<Boolean> =
+        userData.remoteUpdatesEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val showRemoteBanners: StateFlow<Boolean> =
+        userData.showRemoteBanners.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    private val cachedConfig: StateFlow<RemoteConfig?> =
+        userData.cachedRemoteConfig.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** Banners to show, or none when the user has switched them off. */
+    val banners: StateFlow<List<RemoteBanner>> =
+        combine(cachedConfig, showRemoteBanners) { config, enabled ->
+            if (enabled) config?.banners.orEmpty() else emptyList()
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * The update prompt to show, or null. Filters out versions at or below
+     * the installed build, and ones the user already dismissed — except
+     * required updates, which reappear until acted on.
+     */
+    val pendingUpdate: StateFlow<RemoteAppVersion?> =
+        combine(cachedConfig, userData.dismissedUpdateCode) { config, dismissed ->
+            val version = config?.appVersion ?: return@combine null
+            if (version.versionCode <= BuildConfig.VERSION_CODE) return@combine null
+            if (!version.required && version.versionCode <= dismissed) return@combine null
+            version
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
     val queue: StateFlow<List<Song>> = playback.queue
@@ -213,6 +249,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // case where the service starts after these have already been read.
         viewModelScope.launch {
             userData.audioEffects.collect { AudioEngine.applySettings(it.toEngineSettings()) }
+        }
+        // Refresh on launch so banners and the update prompt are current the
+        // moment the app opens, rather than waiting for the background check.
+        AnnouncementWorker.createChannel(application)
+        viewModelScope.launch {
+            if (userData.remoteUpdatesEnabled.first()) {
+                AnnouncementWorker.schedule(application)
+                refreshRemoteConfig()
+            }
         }
     }
 
@@ -377,6 +422,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      *  audio pipeline, so there's one path from storage to hardware. */
     fun setAudioEffects(settings: StoredAudioEffects) = viewModelScope.launch {
         userData.setAudioEffects(settings)
+    }
+
+    /**
+     * Refreshes banners/update info from the site. Failures are swallowed on
+     * purpose — no signal or a site that's down is an ordinary state, and
+     * the cached config carries on being used.
+     */
+    fun refreshRemoteConfig() = viewModelScope.launch {
+        if (!userData.remoteUpdatesEnabled.first()) return@launch
+        remoteConfig.fetch(userData.appConfigUrl.first())
+            .onSuccess { userData.cacheRemoteConfig(it) }
+    }
+
+    fun setAppConfigUrl(url: String) = viewModelScope.launch {
+        userData.setAppConfigUrl(url)
+        refreshRemoteConfig()
+    }
+
+    fun setRemoteUpdatesEnabled(enabled: Boolean) = viewModelScope.launch {
+        userData.setRemoteUpdatesEnabled(enabled)
+        if (enabled) {
+            AnnouncementWorker.schedule(getApplication())
+            refreshRemoteConfig()
+        } else {
+            AnnouncementWorker.cancel(getApplication())
+        }
+    }
+
+    fun setShowRemoteBanners(show: Boolean) = viewModelScope.launch {
+        userData.setShowRemoteBanners(show)
+    }
+
+    /** Stops a non-required update prompt reappearing for that version. */
+    fun dismissUpdate(versionCode: Int) = viewModelScope.launch {
+        userData.setDismissedUpdateCode(versionCode)
     }
 
     fun playSong(song: Song, queue: List<Song> = libraryUiState.value.songs) {

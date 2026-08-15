@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.util.UUID
@@ -39,6 +40,12 @@ class UserDataRepository(private val context: Context) {
         val SAVED_QUEUE = stringPreferencesKey("saved_queue")
         val BOOKMARKS = stringPreferencesKey("bookmarks")
         val AUDIO_EFFECTS = stringPreferencesKey("audio_effects")
+        val APP_CONFIG_URL = stringPreferencesKey("app_config_url")
+        val REMOTE_UPDATES_ENABLED = booleanPreferencesKey("remote_updates_enabled")
+        val SHOW_REMOTE_BANNERS = booleanPreferencesKey("show_remote_banners")
+        val CACHED_REMOTE_CONFIG = stringPreferencesKey("cached_remote_config")
+        val LAST_SEEN_ANNOUNCEMENT = longPreferencesKey("last_seen_announcement")
+        val DISMISSED_UPDATE_CODE = intPreferencesKey("dismissed_update_code")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -158,6 +165,57 @@ class UserDataRepository(private val context: Context) {
 
     suspend fun setAudioEffects(settings: StoredAudioEffects) {
         context.userDataStore.edit { it[Keys.AUDIO_EFFECTS] = json.encodeToString(settings) }
+    }
+
+    val appConfigUrl: Flow<String> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.APP_CONFIG_URL]?.takeIf { it.isNotBlank() } ?: DEFAULT_APP_CONFIG_URL
+    }
+
+    val remoteUpdatesEnabled: Flow<Boolean> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.REMOTE_UPDATES_ENABLED] ?: true
+    }
+
+    val showRemoteBanners: Flow<Boolean> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.SHOW_REMOTE_BANNERS] ?: true
+    }
+
+    /** Last successfully fetched config, so banners survive going offline. */
+    val cachedRemoteConfig: Flow<RemoteConfig?> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.CACHED_REMOTE_CONFIG]?.let { raw ->
+            runCatching { json.decodeFromString<RemoteConfig>(raw) }.getOrNull()
+        }
+    }
+
+    val lastSeenAnnouncement: Flow<Long> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.LAST_SEEN_ANNOUNCEMENT] ?: 0L
+    }
+
+    val dismissedUpdateCode: Flow<Int> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.DISMISSED_UPDATE_CODE] ?: 0
+    }
+
+    suspend fun setAppConfigUrl(url: String) {
+        context.userDataStore.edit { it[Keys.APP_CONFIG_URL] = url }
+    }
+
+    suspend fun setRemoteUpdatesEnabled(enabled: Boolean) {
+        context.userDataStore.edit { it[Keys.REMOTE_UPDATES_ENABLED] = enabled }
+    }
+
+    suspend fun setShowRemoteBanners(show: Boolean) {
+        context.userDataStore.edit { it[Keys.SHOW_REMOTE_BANNERS] = show }
+    }
+
+    suspend fun cacheRemoteConfig(config: RemoteConfig) {
+        context.userDataStore.edit { it[Keys.CACHED_REMOTE_CONFIG] = json.encodeToString(config) }
+    }
+
+    suspend fun setLastSeenAnnouncement(id: Long) {
+        context.userDataStore.edit { it[Keys.LAST_SEEN_ANNOUNCEMENT] = id }
+    }
+
+    suspend fun setDismissedUpdateCode(code: Int) {
+        context.userDataStore.edit { it[Keys.DISMISSED_UPDATE_CODE] = code }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

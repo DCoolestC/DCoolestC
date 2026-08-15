@@ -1,6 +1,7 @@
 package com.isokovibe.musicplayer
 
 import android.Manifest
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -27,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -47,8 +49,10 @@ import com.isokovibe.musicplayer.ui.NowPlayingScreen
 import com.isokovibe.musicplayer.ui.PlaylistDetailScreen
 import com.isokovibe.musicplayer.ui.PlaylistsScreen
 import com.isokovibe.musicplayer.ui.SettingsScreen
+import com.isokovibe.musicplayer.ui.UpdatePromptDialog
 import com.isokovibe.musicplayer.ui.components.BrandTopBar
 import com.isokovibe.musicplayer.ui.components.MiniPlayer
+import com.isokovibe.musicplayer.ui.components.RemoteBannerView
 import com.isokovibe.musicplayer.ui.theme.IsokoVibeTheme
 
 private const val ROUTE_LIBRARY = "library"
@@ -70,6 +74,19 @@ private const val ROUTE_SMART_PLAYLIST = "smart/{kind}"
 private fun smartPlaylistRoute(kind: SmartPlaylist) = "smart/${kind.name}"
 private const val ROUTE_DUPLICATES = "duplicates"
 private const val ROUTE_EQUALIZER = "equalizer"
+
+/** Opens a link in the browser, ignoring the case where no browser exists —
+ *  a promo tap that can't resolve shouldn't crash the music player. */
+private fun openUrl(context: android.content.Context, url: String) {
+    if (url.isBlank()) return
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+        )
+    }
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -116,6 +133,18 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
         }
     }
 
+    // Android 13+ needs explicit permission before any notification can be
+    // posted. Asked once on first launch — if declined, everything else
+    // still works and announcements simply never appear.
+    if (Build.VERSION.SDK_INT >= 33) {
+        val notificationPermission = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
+        LaunchedEffect(Unit) {
+            if (!notificationPermission.status.isGranted) {
+                notificationPermission.launchPermissionRequest()
+            }
+        }
+    }
+
     val libraryUiState by viewModel.libraryUiState.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -140,6 +169,12 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val duplicateGroups by viewModel.duplicateGroups.collectAsState()
     val audioEffects by viewModel.audioEffects.collectAsState()
     val equalizerCapabilities by viewModel.equalizerCapabilities.collectAsState()
+    val banners by viewModel.banners.collectAsState()
+    val pendingUpdate by viewModel.pendingUpdate.collectAsState()
+    val appConfigUrl by viewModel.appConfigUrl.collectAsState()
+    val remoteUpdatesEnabled by viewModel.remoteUpdatesEnabled.collectAsState()
+    val showRemoteBanners by viewModel.showRemoteBanners.collectAsState()
+    val context = LocalContext.current
     val currentSong = viewModel.songById(playbackState.currentSongId)
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -147,7 +182,18 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val miniPlayerColor = miniPlayerColorArgb?.let { Color(it) }
 
     Scaffold(
-        topBar = { if (isTopLevelRoute) BrandTopBar() },
+        topBar = {
+            if (isTopLevelRoute) {
+                Column {
+                    BrandTopBar()
+                    RemoteBannerView(
+                        banners = banners.filter { it.showsInHeader() },
+                        onBannerClick = { openUrl(context, it.linkUrl) },
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        },
         bottomBar = {
             if (isTopLevelRoute) {
                 Column {
@@ -183,6 +229,11 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                             label = { Text("Settings") }
                         )
                     }
+                    RemoteBannerView(
+                        banners = banners.filter { it.showsInFooter() },
+                        onBannerClick = { openUrl(context, it.linkUrl) },
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
                 }
             }
         }
@@ -275,6 +326,12 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     duplicateCount = duplicateGroups.size,
                     onOpenDuplicates = { navController.navigate(ROUTE_DUPLICATES) },
                     onOpenEqualizer = { navController.navigate(ROUTE_EQUALIZER) },
+                    remoteUpdatesEnabled = remoteUpdatesEnabled,
+                    onRemoteUpdatesEnabledChange = viewModel::setRemoteUpdatesEnabled,
+                    showRemoteBanners = showRemoteBanners,
+                    onShowRemoteBannersChange = viewModel::setShowRemoteBanners,
+                    appConfigUrl = appConfigUrl,
+                    onAppConfigUrlChange = viewModel::setAppConfigUrl,
                     contentPadding = padding
                 )
             }
@@ -406,5 +463,15 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                 )
             }
         }
+    }
+
+    // Sits outside the Scaffold so it overlays whatever screen is open —
+    // a required update in particular has to be unavoidable.
+    pendingUpdate?.let { update ->
+        UpdatePromptDialog(
+            version = update,
+            onUpdate = { openUrl(context, update.downloadUrl) },
+            onDismiss = { viewModel.dismissUpdate(update.versionCode) }
+        )
     }
 }
