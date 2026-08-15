@@ -148,30 +148,125 @@ That works because of two things:
 > again, so back it up somewhere durable. Ask me and I'll wire up a
 > secrets-based release signing config when you're ready to ship.
 
-## Deferred — needs your input or device-level testing to get right
+## Premium feature roadmap
 
-These didn't make this pass because they need real hardware/emulator
-verification I can't safely fake from a CI-only build loop — shipping a
-silently-broken version would be worse than being upfront that they're not
-done yet:
+Everything below is buildable on the current architecture — this is the
+menu, not a promise. Pick the ones you want and I'll build them; nothing
+here is in progress unless we've agreed on it.
 
-- **Equalizer / bass boost / ReplayGain** — requires wiring
-  `android.media.audiofx.Equalizer` to the ExoPlayer instance's audio
-  session *across* the `MediaController`/`MediaSession` process boundary
-  (a custom session command, since the base `Player` API doesn't expose
-  `audioSessionId`). Architecturally straightforward but easy to get
-  subtly wrong in a way that only shows up on a real device.
-- **Synced lyrics (`.lrc`)**
-- **Home-screen / lock-screen widgets** (Glance)
-- **Android Auto** (the `MediaSessionService` groundwork is already in
-  place for this)
-- **Tag/metadata editor**
-- **Listening stats**
-- **A-B repeat**
-- A real Play Store–size (512×512) icon export
+**Effort** is my estimate of how much work a feature is end to end:
+**S** = a single session · **M** = a few sessions · **L** = substantial,
+worth splitting across several rounds.
 
-Ads and push notifications aren't in this list because they're not being
-built toward right now by design — see "Ads and push notifications" above.
+**Risk** flags how confidently I can ship it from a CI-only build loop:
+**✅** = CI compiling it is genuinely good evidence it works ·
+**⚠️** = touches audio hardware, system integration, or timing, so it can
+compile clean and still be subtly wrong until you run it on your phone.
+I'll say so on ⚠️ items rather than implying they're verified.
+
+### 1. Library structure & browsing — *the biggest gap*
+
+The library is currently one flat, sortable list of songs. Every other
+serious player lets you come at your music from several directions, and
+this is the single change that would most make the app feel premium.
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **Albums / Artists / Genres tabs** | M | ✅ | Browse by album or artist with art grids, drill into a detail screen. `MediaStore` already returns the album/artist IDs — nothing new to scan. |
+| **Folder browsing** | M | ✅ | Navigate the actual on-disk tree. The one people miss most from file-manager-style players, and it pairs well with the existing library filters. |
+| **Album art grid view** | S | ✅ | Toggle between list and grid, with the grid keyed off album art. |
+| **Multi-select + batch actions** | M | ✅ | Long-press to select several tracks, then queue/add-to-playlist/delete in one go. |
+| **Smart playlists** | M | ✅ | Auto-updating rules — "most played", "added this month", "never played", "favourites by artist X". The play-count/last-played data this needs is already being recorded. |
+| **Duplicate finder** | S | ✅ | Group by title+artist+duration and let you clear out re-downloads. |
+| **Folder allow/deny list** | S | ✅ | A natural extension of the current "skip short clips / skip WhatsApp voice notes" filters — exclude whole directories (Downloads, Recordings) from the library. |
+| **M3U / PLS import & export** | S | ✅ | Playlists currently live only inside the app's own storage. This makes them portable — bring playlists in from another player, or take yours with you. |
+
+### 2. Audio engine & sound quality
+
+The headline gap for anyone who cares about how it *sounds*. All of these
+route through ExoPlayer's audio pipeline.
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **10-band equalizer + presets** | M | ⚠️ | Needs `android.media.audiofx.Equalizer` bound to ExoPlayer's audio session **across the `MediaController`/`MediaSession` process boundary** — the base `Player` API doesn't expose `audioSessionId`, so it takes a custom session command. Straightforward in shape, easy to get subtly wrong in ways only a real device reveals. |
+| **Bass boost / virtualizer / reverb** | S | ⚠️ | Same plumbing as the equalizer; cheap to add once that exists. Do these together. |
+| **ReplayGain normalization** | M | ⚠️ | Levels out volume between tracks from different sources. Reads the gain tag where present, falls back to measured loudness. |
+| **Crossfade between tracks** | M | ⚠️ | Overlapping fade on transition. Genuinely fiddly — interacts with gapless, and getting it wrong produces audible glitches. |
+| **Gapless playback** | S | ⚠️ | ExoPlayer largely handles this; mostly about not breaking it in the queue logic and verifying on real files. |
+| **Skip silence** | S | ⚠️ | ExoPlayer has built-in support — a near-free win once wired to a setting. |
+| **Mono / balance** | S | ⚠️ | Accessibility-oriented, small surface. |
+| **Pitch-preserving speed** | S | ⚠️ | Playback speed already works; this keeps voices natural at 1.5×, which matters if you ever play spoken-word content. |
+
+### 3. Playback & queue
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **Drag-to-reorder the queue** | M | ✅ | The Up Next sheet is tap-to-jump only today. |
+| **"Play next" / "Add to queue"** | S | ✅ | Per-track menu actions — a core interaction that's currently missing. |
+| **Save queue as playlist** | S | ✅ | One tap from Up Next. |
+| **Resume where you left off** | S | ✅ | Persist the queue + position across app restarts, so reopening picks up mid-track. High impact for how "finished" the app feels. |
+| **A-B repeat** | S | ✅ | Loop a section — practice/learning use case. |
+| **Sleep timer: fade out + finish track** | S | ✅ | "Stop at end of current track" and a gentle volume fade instead of an abrupt cut. |
+| **Bookmarks / long-track resume** | M | ✅ | Remembers position per track for anything long-form. |
+
+### 4. Lyrics & metadata
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **Synced lyrics (`.lrc`)** | M | ✅ | Reads sidecar `.lrc` files and embedded lyrics tags, scrolling in time with playback. Local files only — no network lookup. |
+| **Tag editor** | M | ⚠️ | Edit title/artist/album/art, single or batch. ⚠️ because it *writes to the user's files* — needs scoped-storage write permissions handled carefully, and a bug here damages the music library itself. I'd want this tested hard before you trust it. |
+| **Album art fetch & embed** | M | ⚠️ | Fill in missing artwork. Any automatic source means network access, which the app deliberately has none of right now — worth a conversation about whether that trade is worth it. |
+
+### 5. Interface & personalization
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **Multiple Now Playing layouts** | M | ✅ | Two or three player designs to switch between, alongside the existing skin/font settings. |
+| **Dynamic color from album art** | S | ✅ | Accent follows the current track's artwork, as an opt-in alongside the 5 fixed skins. |
+| **Blurred art backdrop** | S | ✅ | Album art blurred behind the player — cheap, and reads as expensive. |
+| **Gesture controls** | S | ✅ | Swipe the mini player left/right to skip, down to dismiss. |
+| **Tablet / landscape layouts** | M | ✅ | Two-pane on wide screens instead of a stretched phone layout. |
+| **Search history & fuzzy matching** | S | ✅ | Tolerate typos, remember recent searches. |
+| **App shortcuts & Quick Settings tile** | S | ✅ | Long-press the icon for "Shuffle all"/"Resume"; a play/pause tile in the notification shade. |
+
+### 6. Reach — beyond the phone screen
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **Home-screen widgets** (Glance) | M | ⚠️ | Several sizes. Widgets run in a different process, so they need testing on a real launcher. |
+| **Android Auto** | M | ⚠️ | The `MediaSessionService` groundwork is already in place, which is most of the battle — but it can't be meaningfully verified without a head unit or the Desktop Head Unit emulator. |
+| **Wear OS companion** | L | ⚠️ | Controls on the watch. Its own module and build target. |
+| **Chromecast / DLNA** | L | ⚠️ | Cast to speakers/TV. Adds a networking dependency and a lot of device-specific behaviour. |
+
+### 7. Insight & history
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **Listening stats screen** | M | ✅ | Top tracks/artists, total listening time, trends. The underlying play-count and last-played data is already being collected — this is presentation. |
+| **Play history timeline** | S | ✅ | A scrollable "what I played, when". |
+| **Last.fm scrobbling** | M | ⚠️ | Would reintroduce network access and account credentials to an app that currently has neither. Worth deciding deliberately. |
+
+### 8. Data safety & store readiness
+
+| Feature | Effort | Risk | Notes |
+|---|---|---|---|
+| **Backup & restore** | S | ✅ | Export playlists/favourites/settings to a file and import them back — protects everything the app knows about you when switching phones. |
+| **Release signing config** | S | ✅ | Secrets-based keystore for Play Store builds. See "Signing & updates" — **required before you publish**, and worth doing early. |
+| **512×512 Play Store icon** | S | ✅ | Store listing asset. |
+| **Localization** | M | ✅ | Strings are already in `strings.xml`; this is translation plus RTL checking. |
+
+### If you only pick three
+
+1. **Albums / Artists / Folders browsing** (§1) — the largest single jump
+   in how complete the app feels, and it's low-risk to build.
+2. **Equalizer + bass boost** (§2) — the most-asked-for feature in any
+   music player, and the thing most likely to be noticed as missing.
+3. **Resume where you left off** (§3) — small, cheap, and disproportionately
+   affects whether the app feels polished day to day.
+
+Ads and push notifications aren't on this list — they're deliberately
+parked, see "Ads and push notifications" above. The WordPress plugins are
+still in the repo whenever you want them wired back in.
 
 ## Branding
 
@@ -249,16 +344,8 @@ CI (`.github/workflows/build-apk.yml`) builds a debug APK on every push
 to a `claude/**` or `main` branch and publishes it to a GitHub Release, so
 you don't need a local Android SDK to get an installable build.
 
-## Roadmap / suggested next steps
+## What to build next
 
-1. Equalizer + ReplayGain volume normalization
-2. Synced lyrics (`.lrc`)
-3. Home-screen & lock-screen widgets
-4. Android Auto support
-5. Tag/metadata editor
-6. Richer listening stats (charts/trends) — basic recently-played/most-played
-   sorting is already shipped, this would be a dedicated stats screen
-7. A-B repeat
-8. M3U playlist import/export
-9. A real Play Store–size (512×512) icon export
-10. Drag-to-reorder in the "Up next" queue sheet (currently tap-to-jump only)
+See **[Premium feature roadmap](#premium-feature-roadmap)** above for the
+full catalogue, grouped by area with effort estimates and honest notes on
+which ones need testing on a real device before you should trust them.
