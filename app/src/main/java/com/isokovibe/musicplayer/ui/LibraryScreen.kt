@@ -85,6 +85,8 @@ fun LibraryScreen(
     onToggleFavorite: (Long) -> Unit,
     onAddToPlaylist: (Playlist, Song) -> Unit,
     onCreatePlaylistAndAdd: (String, Song) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onAddToQueue: (Song) -> Unit,
     onRequestPermission: () -> Unit,
     onRescan: () -> Unit,
     libraryTab: LibraryTab,
@@ -173,6 +175,8 @@ fun LibraryScreen(
                 onSongClick = onSongClick,
                 onToggleFavorite = onToggleFavorite,
                 onAddToPlaylistClick = { songForPlaylistPicker = it },
+                onPlayNext = onPlayNext,
+                onAddToQueue = onAddToQueue,
                 contentPadding = listPadding,
                 modifier = Modifier.weight(1f)
             )
@@ -417,6 +421,8 @@ private fun SongList(
     onSongClick: (Song) -> Unit,
     onToggleFavorite: (Long) -> Unit,
     onAddToPlaylistClick: (Song) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onAddToQueue: (Song) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
@@ -431,7 +437,9 @@ private fun SongList(
                 isFavorite = song.id in favorites,
                 onClick = { onSongClick(song) },
                 onToggleFavorite = { onToggleFavorite(song.id) },
-                onAddToPlaylist = { onAddToPlaylistClick(song) }
+                onAddToPlaylist = { onAddToPlaylistClick(song) },
+                onPlayNext = { onPlayNext(song) },
+                onAddToQueue = { onAddToQueue(song) }
             )
         }
     }
@@ -443,7 +451,9 @@ private fun SongRow(
     isFavorite: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
-    onAddToPlaylist: () -> Unit
+    onAddToPlaylist: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -487,6 +497,20 @@ private fun SongRow(
                 Icon(Icons.Filled.MoreVert, contentDescription = "More options")
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("Play next") },
+                    onClick = {
+                        menuExpanded = false
+                        onPlayNext()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Add to queue") },
+                    onClick = {
+                        menuExpanded = false
+                        onAddToQueue()
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Add to playlist") },
                     onClick = {

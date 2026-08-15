@@ -209,6 +209,8 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onToggleFavorite = viewModel::toggleFavorite,
                     onAddToPlaylist = { playlist, song -> viewModel.addSongToPlaylist(playlist.id, song.id) },
                     onCreatePlaylistAndAdd = { name, song -> viewModel.createPlaylistAndAddSong(name, song.id) },
+                    onPlayNext = { viewModel.playNext(listOf(it)) },
+                    onAddToQueue = { viewModel.addToQueue(listOf(it)) },
                     onRequestPermission = { permissionState.launchPermissionRequest() },
                     onRescan = { viewModel.rescanLibrary() },
                     libraryTab = libraryTab,
@@ -380,6 +382,9 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onSetPlaybackSpeed = viewModel::setPlaybackSpeed,
                     onSetSleepTimer = viewModel::startSleepTimer,
                     onQueueItemClick = viewModel::playFromQueue,
+                    onQueueMove = viewModel::moveQueueItem,
+                    onQueueRemove = viewModel::removeFromQueue,
+                    onSaveQueueAsPlaylist = viewModel::saveQueueAsPlaylist,
                     onBack = { navController.popBackStack() }
                 )
             }

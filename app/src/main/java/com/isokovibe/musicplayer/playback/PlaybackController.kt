@@ -27,7 +27,10 @@ data class PlaybackUiState(
     val shuffleEnabled: Boolean = false,
     @Player.RepeatMode val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val playbackSpeed: Float = 1f,
-    val sleepTimerRemainingMs: Long? = null
+    val sleepTimerRemainingMs: Long? = null,
+    /** Position in the queue, so the Up Next sheet can tell apart two
+     *  entries of the same track rather than highlighting both. */
+    val currentIndex: Int = 0
 )
 
 /**
@@ -60,7 +63,8 @@ class PlaybackController(private val context: Context, private val scope: Corout
             _uiState.update {
                 it.copy(
                     currentSongId = mediaItem?.mediaId?.toLongOrNull(),
-                    durationMs = controller?.duration?.coerceAtLeast(0) ?: 0L
+                    durationMs = controller?.duration?.coerceAtLeast(0) ?: 0L,
+                    currentIndex = controller?.currentMediaItemIndex ?: 0
                 )
             }
         }
@@ -113,6 +117,49 @@ class PlaybackController(private val context: Context, private val scope: Corout
      *  tapping a song in the "Up next" sheet does. */
     fun playFromQueue(index: Int) {
         controller?.seekTo(index, 0L)
+    }
+
+    // The queue mutations below each update ExoPlayer *and* the _queue
+    // mirror. Media3's MediaItems don't carry the full Song back out, so the
+    // mirror is the only place the UI can read titles/art from — letting the
+    // two drift would leave the Up Next sheet showing a stale order.
+
+    /** Appends to the end of the queue. */
+    fun addToQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val c = controller ?: return
+        c.addMediaItems(songs.map(::toMediaItem))
+        _queue.update { it + songs }
+    }
+
+    /** Inserts directly after whatever is playing. */
+    fun playNext(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val c = controller ?: return
+        val insertAt = (c.currentMediaItemIndex + 1).coerceIn(0, c.mediaItemCount)
+        c.addMediaItems(insertAt, songs.map(::toMediaItem))
+        _queue.update { current ->
+            current.toMutableList().apply { addAll(insertAt.coerceIn(0, size), songs) }
+        }
+    }
+
+    fun moveQueueItem(from: Int, to: Int) {
+        val c = controller ?: return
+        val size = _queue.value.size
+        if (from == to || from !in 0 until size || to !in 0 until size) return
+        c.moveMediaItem(from, to)
+        _queue.update { current ->
+            current.toMutableList().apply { add(to, removeAt(from)) }
+        }
+    }
+
+    fun removeFromQueue(index: Int) {
+        val c = controller ?: return
+        if (index !in 0 until _queue.value.size) return
+        c.removeMediaItem(index)
+        _queue.update { current ->
+            current.toMutableList().apply { removeAt(index) }
+        }
     }
 
     fun togglePlayPause() {
@@ -179,7 +226,11 @@ class PlaybackController(private val context: Context, private val scope: Corout
             while (isActive) {
                 val c = controller ?: break
                 _uiState.update {
-                    it.copy(positionMs = c.currentPosition.coerceAtLeast(0), durationMs = c.duration.coerceAtLeast(0))
+                    it.copy(
+                        positionMs = c.currentPosition.coerceAtLeast(0),
+                        durationMs = c.duration.coerceAtLeast(0),
+                        currentIndex = c.currentMediaItemIndex
+                    )
                 }
                 delay(500)
             }

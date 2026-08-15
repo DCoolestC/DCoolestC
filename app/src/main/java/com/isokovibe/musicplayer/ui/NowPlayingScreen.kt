@@ -2,7 +2,6 @@ package com.isokovibe.musicplayer.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -81,6 +80,9 @@ fun NowPlayingScreen(
     onSetPlaybackSpeed: (Float) -> Unit,
     onSetSleepTimer: (Int) -> Unit,
     onQueueItemClick: (Int) -> Unit,
+    onQueueMove: (from: Int, to: Int) -> Unit,
+    onQueueRemove: (Int) -> Unit,
+    onSaveQueueAsPlaylist: (String) -> Unit,
     onBack: () -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
@@ -88,6 +90,7 @@ fun NowPlayingScreen(
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
+    var showSaveQueueDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -298,46 +301,50 @@ fun NowPlayingScreen(
             onDismissRequest = { showQueueSheet = false },
             sheetState = sheetState
         ) {
-            Text(
-                "Up next",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                items(queue.size) { index ->
-                    val queuedSong = queue[index]
-                    val isCurrent = queuedSong.id == song?.id
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onQueueItemClick(index)
-                                showQueueSheet = false
-                            }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AlbumArt(uri = queuedSong.albumArtUri, modifier = Modifier.size(40.dp))
-                        Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                            Text(
-                                queuedSong.title,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                queuedSong.artist,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+            QueueSheet(
+                queue = queue,
+                currentIndex = playback.currentIndex,
+                onItemClick = { index ->
+                    onQueueItemClick(index)
+                    showQueueSheet = false
+                },
+                onMove = onQueueMove,
+                onRemove = onQueueRemove,
+                onSaveAsPlaylist = {
+                    showQueueSheet = false
+                    showSaveQueueDialog = true
                 }
-            }
+            )
         }
+    }
+
+    if (showSaveQueueDialog) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showSaveQueueDialog = false },
+            title = { Text("Save queue as playlist") },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = { Text("Playlist name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onSaveQueueAsPlaylist(name.trim())
+                        showSaveQueueDialog = false
+                    },
+                    enabled = name.isNotBlank()
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveQueueDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 

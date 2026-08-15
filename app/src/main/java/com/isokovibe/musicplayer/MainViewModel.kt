@@ -281,6 +281,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Jumps to [index] in the currently loaded queue — used by the Now Playing "Up next" sheet. */
     fun playFromQueue(index: Int) = playback.playFromQueue(index)
 
+    fun moveQueueItem(from: Int, to: Int) = playback.moveQueueItem(from, to)
+    fun removeFromQueue(index: Int) = playback.removeFromQueue(index)
+
+    /**
+     * Queueing a track when nothing is playing has nothing to append to, so
+     * it starts playback instead — otherwise the action would silently do
+     * nothing, which reads as a broken button.
+     */
+    fun addToQueue(songs: List<Song>) {
+        if (queue.value.isEmpty()) playSongs(songs) else playback.addToQueue(songs)
+    }
+
+    fun playNext(songs: List<Song>) {
+        if (queue.value.isEmpty()) playSongs(songs) else playback.playNext(songs)
+    }
+
+    fun saveQueueAsPlaylist(name: String) = viewModelScope.launch {
+        val current = queue.value
+        if (current.isEmpty()) return@launch
+        val created = userData.createPlaylist(name)
+        current.forEach { userData.addSongToPlaylist(created.id, it.id) }
+    }
+
     fun togglePlayPause() = playback.togglePlayPause()
     fun skipToNext() = playback.skipToNext()
     fun skipToPrevious() = playback.skipToPrevious()
