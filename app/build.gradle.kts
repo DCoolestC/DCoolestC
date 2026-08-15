@@ -5,6 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// Every build gets a version code one higher than the last, so a newer APK
+// always installs *over* an older one instead of being rejected as a
+// downgrade. CI passes the workflow run number; local builds fall back to 1.
+val buildVersionCode = (project.findProperty("isokoVersionCode") as String?)?.toIntOrNull() ?: 1
+
 android {
     namespace = "com.isokovibe.musicplayer"
     compileSdk = 34
@@ -13,11 +18,35 @@ android {
         applicationId = "com.isokovibe.musicplayer"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = buildVersionCode
+        versionName = "0.1.$buildVersionCode"
 
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    // A checked-in signing key, used by BOTH build types.
+    //
+    // Android refuses to install an APK over an existing app when the two are
+    // signed by different keys — it reports a signature mismatch and the only
+    // way through is to uninstall first (losing playlists/favorites/settings
+    // with it). Gradle's default behaviour is to auto-generate a throwaway
+    // debug keystore in ~/.android on whatever machine is building, and CI
+    // runners are wiped between jobs, so every single CI build used to be
+    // signed by a brand-new key. Pinning the key here is what makes updates
+    // install cleanly on top of each other.
+    //
+    // This key is deliberately committed and its password is not a secret: it
+    // exists so test builds share an identity, nothing more. Publishing to the
+    // Play Store needs a *separate* release key that is never committed — see
+    // the "Signing & updates" section of the README before you ship.
+    signingConfigs {
+        create("isokovibe") {
+            storeFile = file("isokovibe-debug.keystore")
+            storePassword = "isokovibe"
+            keyAlias = "isokovibe"
+            keyPassword = "isokovibe"
         }
     }
 
@@ -28,9 +57,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("isokovibe")
         }
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("isokovibe")
         }
     }
 

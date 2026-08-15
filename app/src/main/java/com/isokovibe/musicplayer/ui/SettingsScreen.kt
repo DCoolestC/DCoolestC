@@ -10,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -81,6 +83,7 @@ private val COLOR_SKIN_SWATCH: Map<ColorSkin, Color> = mapOf(
     ColorSkin.SUNSET_AMBER to SkinAmber
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     themeMode: ThemeMode,
@@ -168,15 +171,27 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Row(
+                // Wraps onto as many lines as it needs — there are more
+                // combinations than fit across one row on a phone.
+                FlowRow(
                     modifier = Modifier.padding(top = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     FontCombination.entries.forEach { combo ->
                         FilterChip(
                             selected = fontCombination == combo,
                             onClick = { onFontCombinationChange(combo) },
-                            label = { Text(combo.label) }
+                            label = {
+                                Column {
+                                    Text(combo.label)
+                                    Text(
+                                        combo.hint,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         )
                     }
                 }

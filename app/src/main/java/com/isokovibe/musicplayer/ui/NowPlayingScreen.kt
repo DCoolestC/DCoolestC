@@ -160,13 +160,22 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 24.dp)
-                    .basicMarquee()
+                    // Loops for as long as the screen is open. basicMarquee()
+                    // defaults to iterations = 3, which scrolls a few times
+                    // and then parks the text mid-title — on a screen you sit
+                    // and look at, that reads as the marquee being broken.
+                    .basicMarquee(iterations = Int.MAX_VALUE)
             )
             Text(
                 text = song?.artist ?: "",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .basicMarquee(iterations = Int.MAX_VALUE)
             )
 
             Slider(

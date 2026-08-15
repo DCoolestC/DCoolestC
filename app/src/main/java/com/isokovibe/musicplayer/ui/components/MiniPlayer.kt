@@ -68,8 +68,11 @@ fun MiniPlayer(
                     text = song.title,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee()
+                    overflow = TextOverflow.Clip,
+                    // iterations = 3 (the default) leaves the title parked
+                    // mid-scroll once it's done; the mini player is on screen
+                    // the whole session, so it needs to keep going.
+                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
                 )
                 Text(
                     text = song.artist,

@@ -29,8 +29,12 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # The run number becomes the APK's versionCode, so each build is a
+      # strictly newer version than the last and installs as an update.
+      # Signing key is pinned in app/build.gradle.kts (see the comment there)
+      # so the signature stays identical across runners.
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace -PisokoVersionCode=${{ github.run_number }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -49,7 +53,10 @@ jobs:
           name: iSokoVibe debug build #${{ github.run_number }}
           body: |
             Automated debug build from commit ${{ github.sha }} on `${{ github.ref_name }}`.
-            Unsigned debug APK — install with `adb install` or by enabling
-            "install unknown apps" for your file manager/browser.
+            Version code ${{ github.run_number }}.
+
+            Install straight over any previous iSokoVibe build — no need to
+            uninstall first. Enable "install unknown apps" for your browser or
+            file manager, or use `adb install -r app-debug.apk`.
           prerelease: true
           files: app/build/outputs/apk/debug/*.apk

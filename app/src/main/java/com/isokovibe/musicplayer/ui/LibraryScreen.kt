@@ -1,5 +1,6 @@
 package com.isokovibe.musicplayer.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,12 +9,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
@@ -28,7 +33,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +54,10 @@ import com.isokovibe.musicplayer.data.SortOption
 import com.isokovibe.musicplayer.data.Song
 import com.isokovibe.musicplayer.ui.components.AddToPlaylistDialog
 import com.isokovibe.musicplayer.ui.components.AlbumArt
+
+/** Deliberately shorter than Material3's 56dp text-field minimum — the
+ *  search bar was taking up too much of the library's first screen. */
+private val SEARCH_FIELD_HEIGHT = 40.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,16 +149,15 @@ private fun LibraryControls(
 ) {
     Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Search your library", style = MaterialTheme.typography.bodyMedium) },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                textStyle = MaterialTheme.typography.bodyMedium,
-                singleLine = true
+            CompactSearchField(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onRescan) {
+            IconButton(
+                onClick = onRescan,
+                modifier = Modifier.size(SEARCH_FIELD_HEIGHT)
+            ) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Scan library")
             }
         }
@@ -175,6 +184,77 @@ private fun LibraryControls(
                     onClick = { onSortOptionChange(option) },
                     label = { Text(option.label) }
                 )
+            }
+        }
+    }
+}
+
+/**
+ * A search box built on [BasicTextField] rather than Material3's
+ * `OutlinedTextField`, purely so it can be short. `OutlinedTextField`
+ * enforces a 56dp minimum height (plus its own internal padding) that can't
+ * be overridden, which is what made the search area dominate the top of the
+ * library. This trades the floating label — which this field never used
+ * anyway — for full control of the height.
+ */
+@Composable
+private fun CompactSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.height(SEARCH_FIELD_HEIGHT),
+        shape = RoundedCornerShape(SEARCH_FIELD_HEIGHT / 2),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxSize()
+        ) { innerTextField ->
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp)
+                ) {
+                    if (query.isEmpty()) {
+                        Text(
+                            "Search your library",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    innerTextField()
+                }
+                if (query.isNotEmpty()) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Clear search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onQueryChange("") }
+                    )
+                }
             }
         }
     }

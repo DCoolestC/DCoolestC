@@ -1,10 +1,22 @@
 package com.isokovibe.musicplayer.data
 
-/** Which bundled font family(s) drive the UI's text. */
-enum class FontCombination(val label: String) {
-    ROBOTO("Roboto"),
-    ROBOTO_OPEN_SANS("Roboto + Open Sans"),
-    OPEN_SANS("Open Sans")
+/**
+ * Which bundled font family(s) drive the UI's text. Pairs marked "A + B" put
+ * A on titles and B — always a light/book cut — on the smaller secondary
+ * text, which is where the contrast actually reads.
+ *
+ * [hint] is shown under the label in Settings so the character of each
+ * option is obvious without having to try them all.
+ */
+enum class FontCombination(val label: String, val hint: String) {
+    ROBOTO("Roboto", "Neutral"),
+    ROBOTO_OPEN_SANS("Roboto + Open Sans", "Neutral + book"),
+    ROBOTO_LATO("Roboto + Lato", "Neutral + book"),
+    OPEN_SANS("Open Sans", "Book"),
+    LATO("Lato", "Book"),
+    MONTSERRAT("Montserrat", "Solid"),
+    MONTSERRAT_OPEN_SANS("Montserrat + Open Sans", "Solid + book"),
+    MONTSERRAT_LATO("Montserrat + Lato", "Solid + book")
 }
 
 /** A global multiplier applied on top of every text style's size. */

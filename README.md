@@ -53,12 +53,28 @@ Media3 (ExoPlayer).
   system theme, and Material You dynamic color is intentionally never
   used for any skin, so the app always reads as itself rather than
   tinting to the phone's wallpaper
-- **Fonts** — bundled Roboto and Open Sans (both Apache 2.0), so text
-  never falls back to whatever an OEM skin substitutes for the system
-  font. Open Sans is bundled specifically for its Light "book" (300) cut,
-  used on smaller secondary text. Settings > Fonts lets you pick:
-  - **Combination** — Roboto, Roboto + Open Sans (default: Roboto on
-    titles, Open Sans Light on everything smaller), or Open Sans throughout
+- **Fonts** — four bundled families, so text never falls back to whatever
+  an OEM skin substitutes for the system font: **Roboto** (Apache 2.0),
+  **Open Sans** (Apache 2.0), **Montserrat** (OFL-1.1) and **Lato**
+  (OFL-1.1). Montserrat is the "solid" face — geometric and heavy, echoing
+  the chunky poster lettering in iSokoVibe's brand art. Open Sans and Lato
+  are both bundled for their Light "book" (300) cuts, used on smaller
+  secondary text. Settings > Fonts lets you pick:
+  - **Combination** — 8 options. Pairs ("A + B") put A on titles and a
+    light book face on the smaller text, which is where the contrast
+    actually reads:
+
+    | Option | Character |
+    |---|---|
+    | Roboto | Neutral |
+    | Roboto + Open Sans *(default)* | Neutral + book |
+    | Roboto + Lato | Neutral + book |
+    | Open Sans | Book |
+    | Lato | Book |
+    | Montserrat | Solid |
+    | Montserrat + Open Sans | Solid + book |
+    | Montserrat + Lato | Solid + book |
+
   - **Size** — Small/Default/Large, a multiplier over the whole type scale
   - **Weight** — Light/Default/Bold, shifting the bold-title/light-detail
     contrast a notch either way
@@ -76,6 +92,14 @@ Media3 (ExoPlayer).
 - Mini player gets a Previous button alongside Play/Pause and Next, its
   background color is customizable from Settings (a few brand-red/black/
   white presets), and the track title marquees when it's too long to fit
+- Marquee scrolling loops continuously (`iterations = Int.MAX_VALUE`) on
+  both the mini player and Now Playing's title/artist. Compose's
+  `basicMarquee()` defaults to only 3 passes and then parks the text
+  mid-scroll, which reads as the feature being broken on a screen you sit
+  and look at
+- Compact search field — built on `BasicTextField` rather than Material3's
+  `OutlinedTextField`, which enforces a 56dp minimum height that can't be
+  overridden. It's 40dp here, with a clear ("×") button once you've typed
 - Margins trimmed down across every screen (search bar, song/playlist
   rows, Settings sections) so content runs edge-to-edge instead of
   looking boxed in
@@ -95,6 +119,34 @@ plugin, it just has no Android client subscribed to the topic right
 now. Both are ready to wire back into the app later if you want them
 back — say the word and I'll re-add the app-side integration without
 touching the plugins.
+
+## Signing & updates
+
+New builds install **straight over** an older iSokoVibe build — no need to
+uninstall first, and playlists/favorites/settings survive the update.
+
+That works because of two things:
+
+1. **A pinned signing key** (`app/isokovibe-debug.keystore`, wired up in
+   `app/build.gradle.kts`). Android refuses to install an APK over an app
+   signed by a different key — it reports a signature mismatch, and the
+   only way through is to uninstall, which wipes your data with it.
+   Gradle's default is to auto-generate a throwaway debug keystore on
+   whatever machine is building, and CI runners are wiped between jobs, so
+   before this key existed *every single CI build was signed by a
+   different key* — hence having to delete the app each time.
+2. **An increasing `versionCode`**, taken from the CI run number
+   (`-PisokoVersionCode=...`). Android won't install an APK whose version
+   code is lower than what's already installed, so each build being
+   strictly newer keeps updates one-way and predictable.
+
+> **Before publishing to the Play Store:** the committed key is a *test*
+> key — its password is in the build file and the repo is public, so treat
+> it as public too. A real release needs a separate keystore that is never
+> committed (keep it in GitHub Actions secrets or offline). Losing a
+> published app's release key means you can never update that listing
+> again, so back it up somewhere durable. Ask me and I'll wire up a
+> secrets-based release signing config when you're ready to ship.
 
 ## Deferred — needs your input or device-level testing to get right
 
@@ -175,7 +227,8 @@ app/src/main/java/com/isokovibe/musicplayer/
     ├── theme/                    # Color.kt (5 skins), Theme.kt (builds ColorScheme per skin), Type.kt (builds Typography)
     └── components/                # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog
 
-app/src/main/res/font/         # Bundled Roboto + Open Sans TTFs (Apache 2.0)
+app/src/main/res/font/         # Bundled Roboto + Open Sans (Apache 2.0), Montserrat + Lato (OFL-1.1)
+app/isokovibe-debug.keystore   # Pinned test signing key — see "Signing & updates"
 wordpress-plugin/
 ├── isokovibe-push-notifications/  # Sends a push on publish
 └── isokovibe-custom-ads/          # "App Ads" admin screen + the feed the app polls

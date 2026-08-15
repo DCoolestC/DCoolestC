@@ -33,6 +33,28 @@ val OpenSansFamily = FontFamily(
     Font(R.font.open_sans_bold, FontWeight.Bold)
 )
 
+// Bundled Montserrat (OFL-1.1) — the "solid" option. Geometric, wide, and
+// heavy at the top of its range, which is why it's offered as a title face:
+// it echoes the chunky poster lettering in iSokoVibe's own brand art.
+val MontserratFamily = FontFamily(
+    Font(R.font.montserrat_light, FontWeight.Light),
+    Font(R.font.montserrat_regular, FontWeight.Normal),
+    Font(R.font.montserrat_medium, FontWeight.Medium),
+    Font(R.font.montserrat_bold, FontWeight.Bold),
+    Font(R.font.montserrat_black, FontWeight.Black)
+)
+
+// Bundled Lato (OFL-1.1) — the second "book" option alongside Open Sans.
+// Its Light cut is a true 300 and runs narrower than Open Sans Light, so it
+// fits more of a long track/artist name on one line before marquee kicks in.
+val LatoFamily = FontFamily(
+    Font(R.font.lato_light, FontWeight.Light),
+    Font(R.font.lato_regular, FontWeight.Normal),
+    Font(R.font.lato_medium, FontWeight.Medium),
+    Font(R.font.lato_bold, FontWeight.Bold),
+    Font(R.font.lato_black, FontWeight.Black)
+)
+
 // Start from Material3's default type scale (line-heights/spacing) and
 // swap every role onto the chosen font(s).
 private val baseline = Typography()
@@ -89,8 +111,19 @@ fun isokoVibeTypography(
     sizeScale: FontSizeScale = FontSizeScale.DEFAULT,
     weightPreference: FontWeightPreference = FontWeightPreference.DEFAULT
 ): Typography {
-    val titleFamily = if (combination == FontCombination.OPEN_SANS) OpenSansFamily else RobotoFamily
-    val bodyFamily = if (combination == FontCombination.ROBOTO) RobotoFamily else OpenSansFamily
+    // (title face, body face) for each combination. Single-family entries
+    // repeat the same face on both; pairs put the heavier/more characterful
+    // face on titles and a light "book" face on the smaller text.
+    val (titleFamily, bodyFamily) = when (combination) {
+        FontCombination.ROBOTO -> RobotoFamily to RobotoFamily
+        FontCombination.ROBOTO_OPEN_SANS -> RobotoFamily to OpenSansFamily
+        FontCombination.ROBOTO_LATO -> RobotoFamily to LatoFamily
+        FontCombination.OPEN_SANS -> OpenSansFamily to OpenSansFamily
+        FontCombination.LATO -> LatoFamily to LatoFamily
+        FontCombination.MONTSERRAT -> MontserratFamily to MontserratFamily
+        FontCombination.MONTSERRAT_OPEN_SANS -> MontserratFamily to OpenSansFamily
+        FontCombination.MONTSERRAT_LATO -> MontserratFamily to LatoFamily
+    }
     val w = weightProfiles.getValue(weightPreference)
     val s = sizeScale.multiplier
 
