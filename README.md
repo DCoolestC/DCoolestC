@@ -28,16 +28,42 @@ Media3 (ExoPlayer).
   (by folder or `PTT-`/`AUD-...-WA` filename pattern — on by default, some
   devices index these as regular music). Both are in Settings > Library
   and re-scan the library immediately when changed
+- **Browse tabs** — Songs / Albums / Artists / Genres / Folders, with a
+  grid or list view for albums and one search box that narrows whichever
+  tab is open. All four browse tabs drill into a shared detail screen with
+  Play and Shuffle. Groups are derived from the already-filtered song list,
+  so an album made entirely of tracks you've hidden doesn't appear.
+  (Genres need Android 11+, where the platform first exposes genre tags.)
 - **Favorites** — heart-toggle on any track, from the library list or Now
   Playing
 - **Playlists** — create, rename, delete, add/remove tracks, play a
   playlist from any track or from the top; persisted locally via DataStore
+- **Smart playlists** — Favorites, Recently added, Recently played, Most
+  played, Never played. Derived from rules rather than stored, so they
+  never go stale
+- **Duplicate finder** — Settings → Library. Groups by title + artist and
+  shows each copy's folder and duration. Read-only: deleting means writing
+  to your music files, which is scheduled with the tag editor so the same
+  file-write machinery gets built and tested once
+- **Queue control** — long-press-drag to reorder, remove individual
+  tracks, "Play next" / "Add to queue" from any song's menu, and save the
+  current queue as a playlist
+- **Resume where you left off** — the queue and position are restored on
+  launch, prepared but not auto-played. Tracks 10 minutes or longer also
+  get their own resume point, so a long mix picks up where it stopped
+- **A-B repeat** — set two points and loop between them; the menu item
+  relabels itself to whichever step is next
+- **Equalizer & effects** — Settings → Sound. Bands are generated from
+  what the device reports (Android promises no fixed count — most hardware
+  gives five), plus presets, bass boost, virtualizer, reverb, volume boost
+  and skip-silence
 - **Now Playing** — seek bar, play/pause, skip, shuffle, repeat
   (off → all → one), favorite toggle, sleep timer, playback speed, a
   marquee-scrolling title for long track names, and an **Up next** sheet
-  showing the rest of the current queue (tap any track to jump to it)
-- **Sleep timer** — 15/30/45/60 minutes, pauses playback and counts down
-  live; adjustable from Settings or Now Playing's overflow menu
+  showing the rest of the current queue (tap to jump, drag to reorder)
+- **Sleep timer** — 15/30/45/60 minutes or "at end of this track", with
+  the volume easing down over the final 15 seconds rather than cutting out
+  mid-bar; adjustable from Settings or Now Playing's overflow menu
 - **Playback speed** — 0.75x–2x, from Settings or Now Playing
 - **Haptic feedback** on Play/Pause and Favorite, on both the mini player
   and Now Playing
@@ -104,21 +130,39 @@ Media3 (ExoPlayer).
   rows, Settings sections) so content runs edge-to-edge instead of
   looking boxed in
 
-## Ads and push notifications — removed from the app for now
+## Controlling the app from iSokoVibe.com.ng
 
-The app was getting heavier than it needed to be, so the AdMob banner,
-the in-app "your own ads" carousel, the spinning album-art animation,
-and push notifications have all been stripped out of the Android app
-(no more `play-services-ads`/Firebase SDKs, no ad/notification code
-paths, no related Settings sections). The two WordPress plugins are
-**left untouched in `wordpress-plugin/`** — since ads are now being
-managed entirely from the WordPress side, `isokovibe-custom-ads` is
-usable as-is on the site even without the in-app carousel consuming its
-feed. `isokovibe-push-notifications` still works as a "send on publish"
-plugin, it just has no Android client subscribed to the topic right
-now. Both are ready to wire back into the app later if you want them
-back — say the word and I'll re-add the app-side integration without
-touching the plugins.
+Install **`wordpress-plugin/isokovibe-app-control/`** and three things
+become controllable from wp-admin without touching the app. Full setup
+instructions are in that folder's README; the short version:
+
+| Feature | Where | What it does |
+|---|---|---|
+| **Announcements** | App Control → New Announcement | Publish a title + body + link and phones show a notification. Only these reach the app — ordinary blog posts never do. |
+| **App Update** | App Control → App Update | Set a version code/name/download URL; anything above the installed build prompts users to update from the site. |
+| **Banners** | App Control → App Banners | 33:7 promo artwork with a link, placed in the header, footer, or both. Publish to go live, draft to pull. |
+
+Everything is served from one public read-only endpoint,
+`/wp-json/isokovibe/v1/app-config`, so a phone makes one request rather
+than three and the features can't be read in inconsistent states.
+
+**Announcements arrive by polling, not push.** The app checks roughly
+every six hours and whenever it's opened, so delivery is within hours
+rather than seconds. Firebase Cloud Messaging would be instant but needs
+a Firebase project, a `google-services.json` compiled into the app, and a
+service-account key on the server — all of which must be correct before a
+single message sends. This needs none of them. FCM can be added alongside
+later if the delay becomes a problem.
+
+Users can switch announcements and banners off independently in Settings.
+
+### The older plugins
+
+`isokovibe-push-notifications` and `isokovibe-custom-ads` predate this and
+are **superseded by App Control** — they were built when notifications
+fired automatically on every post, which turned out not to be what was
+wanted. They're left in the repo rather than deleted in case anything on
+the site still references them, but App Control is the one to install.
 
 ## Signing & updates
 
@@ -150,9 +194,25 @@ That works because of two things:
 
 ## Premium feature roadmap
 
-Everything below is buildable on the current architecture — this is the
-menu, not a promise. Pick the ones you want and I'll build them; nothing
-here is in progress unless we've agreed on it.
+Everything below is buildable on the current architecture. Pick the ones
+you want and I'll build them.
+
+> **Progress so far.** Sections 1 (library structure), 2 (audio engine)
+> and 3 (playback & queue) are **built and shipping** — see "What's
+> implemented" above for the detail. Still open: §4 lyrics & metadata,
+> §5 interface & personalization, §6 reach (widgets/Auto/Wear/cast),
+> §7 insight & history, §8 data safety & store readiness.
+>
+> Four items inside the shipped sections are deliberately still open, each
+> for a stated reason rather than an oversight: **crossfade** (needs a
+> two-player rework of the service — a non-overlapping fade would be
+> mislabelling it), **ReplayGain** (needs per-file tag parsing; the volume
+> boost that shipped is a flat gain, not that), **mono/balance** (needs a
+> custom `AudioProcessor`), and **duplicate deletion** (writes to your
+> music files, so it's grouped with the tag editor). One turned out to
+> need no work at all: **pitch-preserving speed** — ExoPlayer's default
+> Sonic processor already time-stretches without shifting pitch, so the
+> existing speed control has always preserved pitch.
 
 **Effort** is my estimate of how much work a feature is end to end:
 **S** = a single session · **M** = a few sessions · **L** = substantial,
@@ -255,14 +315,17 @@ route through ExoPlayer's audio pipeline.
 | **512×512 Play Store icon** | S | ✅ | Store listing asset. |
 | **Localization** | M | ✅ | Strings are already in `strings.xml`; this is translation plus RTL checking. |
 
-### If you only pick three
+### What I'd do next
 
-1. **Albums / Artists / Folders browsing** (§1) — the largest single jump
-   in how complete the app feels, and it's low-risk to build.
-2. **Equalizer + bass boost** (§2) — the most-asked-for feature in any
-   music player, and the thing most likely to be noticed as missing.
-3. **Resume where you left off** (§3) — small, cheap, and disproportionately
-   affects whether the app feels polished day to day.
+The original "if you only pick three" — library browsing, equalizer,
+resume where you left off — are all shipped. Of what's left:
+
+1. **Synced lyrics** (§4) — the most visible remaining gap for a music
+   player, and low-risk since it reads local `.lrc` files with no network.
+2. **Home-screen widget** (§6) — high day-to-day value, though it needs
+   testing on a real launcher.
+3. **Backup & restore** (§8) — cheap, and it protects playlists,
+   favourites and settings, none of which currently survive losing a phone.
 
 Ads and push notifications aren't on this list — they're deliberately
 parked, see "Ads and push notifications" above. The WordPress plugins are
@@ -303,30 +366,44 @@ app/src/main/java/com/isokovibe/musicplayer/
 ├── MainActivity.kt          # Compose entry point, bottom-nav + branded chrome, nav host
 ├── MainViewModel.kt         # Library/search/sort/favorites/playlists/playback state
 ├── data/
-│   ├── Song.kt                # Track model
-│   ├── MusicRepository.kt     # MediaStore query — duration filter + WhatsApp voice note detection
-│   ├── Playlist.kt            # Playlist model (serializable)
+│   ├── Song.kt                # Track model, incl. album/artist/folder/genre grouping keys
+│   ├── MusicRepository.kt     # MediaStore query — duration, WhatsApp voice note and folder filters
+│   ├── LibraryGroups.kt       # Derives Albums/Artists/Genres/Folders from the scanned list
+│   ├── SmartPlaylist.kt       # Rule-based playlists + duplicate detection
+│   ├── Playlist.kt            # Playlist, SavedQueue, StoredAudioEffects (serializable)
 │   ├── SortOption.kt          # Title/Artist/Album/Duration/Recently played/Most played
 │   ├── ThemeMode.kt
 │   ├── AppearanceSettings.kt  # ColorSkin, FontCombination, FontSizeScale, FontWeightPreference, MinTrackDuration
-│   └── UserDataRepository.kt  # DataStore-backed prefs: favorites/playlists/appearance/library filters/play stats
+│   ├── RemoteConfig.kt        # Announcement / app version / banner models
+│   ├── RemoteConfigRepository.kt # Single GET of the site's app-config endpoint
+│   └── UserDataRepository.kt  # DataStore-backed prefs, play stats, saved queue, cached remote config
 ├── playback/
 │   ├── MusicService.kt        # MediaSessionService hosting ExoPlayer
-│   └── PlaybackController.kt  # MediaController wrapper: queue, speed, sleep timer
+│   ├── AudioEngine.kt         # Equalizer/bass/virtualizer/reverb/loudness bound to the audio session
+│   └── PlaybackController.kt  # MediaController wrapper: queue, speed, sleep timer, A-B repeat
+├── remote/
+│   └── AnnouncementWorker.kt  # Periodic check for site announcements → notification
 └── ui/
-    ├── LibraryScreen.kt
+    ├── LibraryScreen.kt          # Browse tabs + compact search
+    ├── BrowseViews.kt            # Album grid/list, artist/genre/folder lists
+    ├── GroupDetailScreen.kt      # Shared detail screen for album/artist/genre/folder/smart playlist
     ├── PlaylistsScreen.kt
     ├── PlaylistDetailScreen.kt
+    ├── DuplicatesScreen.kt
+    ├── EqualizerScreen.kt
     ├── SettingsScreen.kt
-    ├── NowPlayingScreen.kt       # Includes the "Up next" queue bottom sheet
+    ├── NowPlayingScreen.kt
+    ├── QueueSheet.kt             # "Up next" with drag-to-reorder
+    ├── UpdatePromptDialog.kt
     ├── theme/                    # Color.kt (5 skins), Theme.kt (builds ColorScheme per skin), Type.kt (builds Typography)
-    └── components/                # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog
+    └── components/               # BrandTopBar, AlbumArt, MiniPlayer, AddToPlaylistDialog, RemoteBannerView
 
 app/src/main/res/font/         # Bundled Roboto + Open Sans (Apache 2.0), Montserrat + Lato (OFL-1.1)
 app/isokovibe-debug.keystore   # Pinned test signing key — see "Signing & updates"
 wordpress-plugin/
-├── isokovibe-push-notifications/  # Sends a push on publish
-└── isokovibe-custom-ads/          # "App Ads" admin screen + the feed the app polls
+├── isokovibe-app-control/         # ← install this one: announcements, update prompts, banners
+├── isokovibe-push-notifications/  # superseded — auto-sent on every post
+└── isokovibe-custom-ads/          # superseded — earlier ad feed
 ```
 
 ## Building
