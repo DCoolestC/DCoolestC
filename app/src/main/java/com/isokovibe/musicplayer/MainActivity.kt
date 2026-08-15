@@ -40,6 +40,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.isokovibe.musicplayer.data.GroupType
 import com.isokovibe.musicplayer.data.SmartPlaylist
 import com.isokovibe.musicplayer.ui.DuplicatesScreen
+import com.isokovibe.musicplayer.ui.EqualizerScreen
 import com.isokovibe.musicplayer.ui.GroupDetailScreen
 import com.isokovibe.musicplayer.ui.LibraryScreen
 import com.isokovibe.musicplayer.ui.NowPlayingScreen
@@ -68,6 +69,7 @@ private fun groupDetailRoute(type: GroupType, key: String) =
 private const val ROUTE_SMART_PLAYLIST = "smart/{kind}"
 private fun smartPlaylistRoute(kind: SmartPlaylist) = "smart/${kind.name}"
 private const val ROUTE_DUPLICATES = "duplicates"
+private const val ROUTE_EQUALIZER = "equalizer"
 
 class MainActivity : ComponentActivity() {
 
@@ -136,6 +138,8 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val excludedFolders by viewModel.excludedFolders.collectAsState()
     val smartPlaylistCounts by viewModel.smartPlaylistCounts.collectAsState()
     val duplicateGroups by viewModel.duplicateGroups.collectAsState()
+    val audioEffects by viewModel.audioEffects.collectAsState()
+    val equalizerCapabilities by viewModel.equalizerCapabilities.collectAsState()
     val currentSong = viewModel.songById(playbackState.currentSongId)
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -270,6 +274,7 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onRemoveExcludedFolder = viewModel::toggleExcludedFolder,
                     duplicateCount = duplicateGroups.size,
                     onOpenDuplicates = { navController.navigate(ROUTE_DUPLICATES) },
+                    onOpenEqualizer = { navController.navigate(ROUTE_EQUALIZER) },
                     contentPadding = padding
                 )
             }
@@ -363,6 +368,14 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                 DuplicatesScreen(
                     duplicates = duplicateGroups,
                     onSongClick = { song -> viewModel.playSongs(listOf(song)) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(ROUTE_EQUALIZER) {
+                EqualizerScreen(
+                    settings = audioEffects,
+                    capabilities = equalizerCapabilities,
+                    onSettingsChange = viewModel::setAudioEffects,
                     onBack = { navController.popBackStack() }
                 )
             }

@@ -114,6 +114,7 @@ fun SettingsScreen(
     onRemoveExcludedFolder: (String) -> Unit,
     duplicateCount: Int,
     onOpenDuplicates: () -> Unit,
+    onOpenEqualizer: () -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -241,6 +242,32 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+        }
+
+        item { SectionDivider() }
+        item { SectionHeader("Sound") }
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenEqualizer() }
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Equalizer & effects", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Bands, presets, bass boost, virtualizer, reverb, skip silence",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    Icons.Filled.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -423,7 +450,6 @@ fun SettingsScreen(
         item { SectionHeader("Coming soon") }
         items(
             listOf(
-                "Equalizer & bass boost",
                 "Synced lyrics (.lrc)",
                 "Home-screen widgets",
                 "Android Auto",

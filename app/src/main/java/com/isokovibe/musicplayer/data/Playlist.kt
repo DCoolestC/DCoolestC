@@ -21,3 +21,21 @@ data class SavedQueue(
     val index: Int = 0,
     val positionMs: Long = 0L
 )
+
+/**
+ * Persisted form of the audio effect settings. Kept separate from the
+ * playback layer's own settings type so the data layer doesn't depend on
+ * the platform audio APIs, and so adding a field here can't silently change
+ * what gets pushed to the hardware.
+ */
+@Serializable
+data class StoredAudioEffects(
+    val equalizerEnabled: Boolean = false,
+    val bandLevels: List<Int> = emptyList(),
+    val presetIndex: Int = -1,
+    val bassBoost: Int = 0,
+    val virtualizer: Int = 0,
+    val reverbPreset: Int = 0,
+    val loudnessGain: Int = 0,
+    val skipSilence: Boolean = false
+)

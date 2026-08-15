@@ -38,6 +38,7 @@ class UserDataRepository(private val context: Context) {
         val LAST_PLAYED = stringPreferencesKey("last_played")
         val SAVED_QUEUE = stringPreferencesKey("saved_queue")
         val BOOKMARKS = stringPreferencesKey("bookmarks")
+        val AUDIO_EFFECTS = stringPreferencesKey("audio_effects")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -146,6 +147,17 @@ class UserDataRepository(private val context: Context) {
             } ?: return@edit
             prefs[Keys.BOOKMARKS] = json.encodeToString(current - songId)
         }
+    }
+
+    /** Equalizer / bass / virtualizer / reverb / loudness / skip-silence. */
+    val audioEffects: Flow<StoredAudioEffects> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.AUDIO_EFFECTS]?.let { raw ->
+            runCatching { json.decodeFromString<StoredAudioEffects>(raw) }.getOrNull()
+        } ?: StoredAudioEffects()
+    }
+
+    suspend fun setAudioEffects(settings: StoredAudioEffects) {
+        context.userDataStore.edit { it[Keys.AUDIO_EFFECTS] = json.encodeToString(settings) }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

@@ -3,6 +3,7 @@ package com.isokovibe.musicplayer.playback
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
@@ -28,6 +29,22 @@ class MusicService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
+        AudioEngine.attachPlayer(player)
+        // The audio session id isn't necessarily known at build time and can
+        // change during the player's life, so bind the effects from the
+        // event rather than reading it once and hoping.
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onAudioSessionIdChanged(
+                eventTime: AnalyticsListener.EventTime,
+                audioSessionId: Int
+            ) {
+                AudioEngine.attachSession(audioSessionId)
+            }
+        })
+        if (player.audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+            AudioEngine.attachSession(player.audioSessionId)
+        }
+
         mediaSession = MediaSession.Builder(this, player).build()
     }
 
@@ -44,6 +61,7 @@ class MusicService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        AudioEngine.release()
         mediaSession?.run {
             player.release()
             release()

@@ -19,11 +19,15 @@ import com.isokovibe.musicplayer.data.ThemeMode
 import com.isokovibe.musicplayer.data.UserDataRepository
 import com.isokovibe.musicplayer.data.DuplicateGroup
 import com.isokovibe.musicplayer.data.SmartPlaylist
+import com.isokovibe.musicplayer.data.StoredAudioEffects
 import com.isokovibe.musicplayer.data.buildGroups
 import com.isokovibe.musicplayer.data.findDuplicates
 import com.isokovibe.musicplayer.data.matching
 import com.isokovibe.musicplayer.data.resolveSmartPlaylist
 import com.isokovibe.musicplayer.data.songsIn
+import com.isokovibe.musicplayer.playback.AudioEffectSettings
+import com.isokovibe.musicplayer.playback.AudioEngine
+import com.isokovibe.musicplayer.playback.EqualizerCapabilities
 import com.isokovibe.musicplayer.playback.PlaybackController
 import com.isokovibe.musicplayer.playback.PlaybackUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +42,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+/** Bridges the stored (serializable) form to the playback layer's own type,
+ *  keeping the data layer free of any dependency on platform audio APIs. */
+private fun StoredAudioEffects.toEngineSettings() = AudioEffectSettings(
+    equalizerEnabled = equalizerEnabled,
+    bandLevels = bandLevels,
+    presetIndex = presetIndex,
+    bassBoost = bassBoost,
+    virtualizer = virtualizer,
+    reverbPreset = reverbPreset,
+    loudnessGain = loudnessGain,
+    skipSilence = skipSilence
+)
 
 /** How often the queue/position snapshot is written for resume. */
 private const val SAVE_INTERVAL_MS = 5_000L
@@ -116,6 +133,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userData.lastPlayed.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     val bookmarks: StateFlow<Map<Long, Long>> =
         userData.bookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    val audioEffects: StateFlow<StoredAudioEffects> =
+        userData.audioEffects.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StoredAudioEffects())
+
+    /** What this specific device's equalizer supports — band count and
+     *  frequencies vary by hardware, so the UI is built from this. */
+    val equalizerCapabilities: StateFlow<EqualizerCapabilities> = AudioEngine.capabilities
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
     val queue: StateFlow<List<Song>> = playback.queue
@@ -184,6 +207,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         startPersistingPlaybackPosition()
+        // Push saved effect settings into the audio pipeline, and keep doing
+        // so as they change. AudioEngine also replays the last-applied
+        // settings whenever a new audio session attaches, which covers the
+        // case where the service starts after these have already been read.
+        viewModelScope.launch {
+            userData.audioEffects.collect { AudioEngine.applySettings(it.toEngineSettings()) }
+        }
     }
 
     /**
@@ -341,6 +371,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleExcludedFolder(path: String) = viewModelScope.launch {
         userData.toggleExcludedFolder(path)
         rescanLibrary()
+    }
+
+    /** Writes new effect settings; the collector in init pushes them to the
+     *  audio pipeline, so there's one path from storage to hardware. */
+    fun setAudioEffects(settings: StoredAudioEffects) = viewModelScope.launch {
+        userData.setAudioEffects(settings)
     }
 
     fun playSong(song: Song, queue: List<Song> = libraryUiState.value.songs) {
