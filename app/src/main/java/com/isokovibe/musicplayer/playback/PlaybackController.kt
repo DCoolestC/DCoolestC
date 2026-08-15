@@ -30,13 +30,21 @@ data class PlaybackUiState(
     val sleepTimerRemainingMs: Long? = null,
     /** Position in the queue, so the Up Next sheet can tell apart two
      *  entries of the same track rather than highlighting both. */
-    val currentIndex: Int = 0
+    val currentIndex: Int = 0,
+    /** Set when the timer is waiting for the current track to end rather
+     *  than counting down to a wall-clock time. */
+    val sleepAtEndOfTrack: Boolean = false,
+    val abStartMs: Long? = null,
+    val abEndMs: Long? = null
 )
 
 /**
  * Thin wrapper around a [MediaController] connected to [MusicService].
  * The UI layer only ever talks to this class, never to ExoPlayer directly.
  */
+/** How long before a sleep timer fires that the volume starts easing down. */
+private const val FADE_OUT_MS = 15_000L
+
 class PlaybackController(private val context: Context, private val scope: CoroutineScope) {
 
     private var controller: MediaController? = null
@@ -60,12 +68,21 @@ class PlaybackController(private val context: Context, private val scope: Corout
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // Reaching a new track ends any A-B loop — the marks refer to
+            // positions in the track they were set on, so carrying them over
+            // would loop an arbitrary stretch of a different song.
             _uiState.update {
                 it.copy(
                     currentSongId = mediaItem?.mediaId?.toLongOrNull(),
                     durationMs = controller?.duration?.coerceAtLeast(0) ?: 0L,
-                    currentIndex = controller?.currentMediaItemIndex ?: 0
+                    currentIndex = controller?.currentMediaItemIndex ?: 0,
+                    abStartMs = null,
+                    abEndMs = null
                 )
+            }
+            if (_uiState.value.sleepAtEndOfTrack && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                controller?.pause()
+                _uiState.update { it.copy(sleepAtEndOfTrack = false) }
             }
         }
 
@@ -87,8 +104,13 @@ class PlaybackController(private val context: Context, private val scope: Corout
         val future = MediaController.Builder(context, sessionToken).buildAsync()
         future.addListener(
             {
-                controller = future.get().also { it.addListener(playerListener) }
-                onReady()
+                // get() can throw if the session went away before we
+                // connected; failing here would take the whole app down on a
+                // race that just means "no playback yet".
+                runCatching { future.get() }.getOrNull()?.let { built ->
+                    controller = built.also { it.addListener(playerListener) }
+                    onReady()
+                }
             },
             MoreExecutors.directExecutor()
         )
@@ -103,13 +125,36 @@ class PlaybackController(private val context: Context, private val scope: Corout
     }
 
     /** Loads [songs] as the playback queue and starts playing at [startIndex]. */
-    fun playQueue(songs: List<Song>, startIndex: Int) {
+    fun playQueue(songs: List<Song>, startIndex: Int, startPositionMs: Long = 0L) {
         _queue.value = songs
+        clearAbRepeat()
         val items = songs.map(::toMediaItem)
         controller?.apply {
-            setMediaItems(items, startIndex, 0L)
+            setMediaItems(items, startIndex, startPositionMs)
             prepare()
             play()
+        }
+    }
+
+    /**
+     * Rebuilds a previously saved queue *without* starting playback — the
+     * app reopening shouldn't start making noise on its own. It prepares so
+     * the mini player shows the track and a single tap resumes.
+     */
+    fun restoreQueue(songs: List<Song>, index: Int, positionMs: Long) {
+        if (songs.isEmpty()) return
+        _queue.value = songs
+        val safeIndex = index.coerceIn(0, songs.lastIndex)
+        controller?.apply {
+            setMediaItems(songs.map(::toMediaItem), safeIndex, positionMs)
+            prepare()
+        }
+        _uiState.update {
+            it.copy(
+                currentSongId = songs[safeIndex].id,
+                currentIndex = safeIndex,
+                positionMs = positionMs
+            )
         }
     }
 
@@ -197,27 +242,65 @@ class PlaybackController(private val context: Context, private val scope: Corout
     fun startSleepTimer(minutes: Int) {
         sleepTimerJob?.cancel()
         if (minutes <= 0) {
-            _uiState.update { it.copy(sleepTimerRemainingMs = null) }
+            cancelSleepTimer()
             return
         }
         val endAtMs = System.currentTimeMillis() + minutes * 60_000L
+        _uiState.update { it.copy(sleepAtEndOfTrack = false) }
         sleepTimerJob = scope.launch {
             while (isActive) {
                 val remaining = endAtMs - System.currentTimeMillis()
-                if (remaining <= 0) {
-                    controller?.pause()
-                    _uiState.update { it.copy(sleepTimerRemainingMs = null) }
-                    break
+                if (remaining <= 0) break
+                // Ease the volume down over the final stretch instead of
+                // cutting out mid-bar — the point of a sleep timer is to not
+                // be noticed, and an abrupt stop is exactly what wakes you.
+                if (remaining <= FADE_OUT_MS) {
+                    controller?.volume = (remaining.toFloat() / FADE_OUT_MS).coerceIn(0f, 1f)
                 }
                 _uiState.update { it.copy(sleepTimerRemainingMs = remaining) }
-                delay(1000)
+                delay(if (remaining <= FADE_OUT_MS) 200 else 1000)
             }
+            controller?.pause()
+            // Restore the volume once paused, or the next manual play would
+            // start silent with no obvious explanation.
+            controller?.volume = 1f
+            _uiState.update { it.copy(sleepTimerRemainingMs = null) }
         }
+    }
+
+    /** Stops once the current track finishes, rather than at a set time. */
+    fun sleepAtEndOfTrack() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _uiState.update { it.copy(sleepTimerRemainingMs = null, sleepAtEndOfTrack = true) }
     }
 
     fun cancelSleepTimer() {
         sleepTimerJob?.cancel()
-        _uiState.update { it.copy(sleepTimerRemainingMs = null) }
+        sleepTimerJob = null
+        controller?.volume = 1f
+        _uiState.update { it.copy(sleepTimerRemainingMs = null, sleepAtEndOfTrack = false) }
+    }
+
+    /** Marks the start of an A-B loop at the current position. */
+    fun setAbPointA() {
+        val position = controller?.currentPosition ?: return
+        _uiState.update { it.copy(abStartMs = position, abEndMs = null) }
+    }
+
+    /**
+     * Marks the loop end. Ignored unless it's after point A — a B before A
+     * would mean an interval that can never be played through.
+     */
+    fun setAbPointB() {
+        val position = controller?.currentPosition ?: return
+        val start = _uiState.value.abStartMs ?: return
+        if (position <= start) return
+        _uiState.update { it.copy(abEndMs = position) }
+    }
+
+    fun clearAbRepeat() {
+        _uiState.update { it.copy(abStartMs = null, abEndMs = null) }
     }
 
     private fun startPositionUpdates() {
@@ -225,9 +308,26 @@ class PlaybackController(private val context: Context, private val scope: Corout
         positionJob = scope.launch {
             while (isActive) {
                 val c = controller ?: break
+                val position = c.currentPosition.coerceAtLeast(0)
+
+                // A-B loop. Enforced from this existing tick rather than a
+                // separate watcher, so the loop costs nothing extra while
+                // no A-B is set. 500ms granularity means the wrap can
+                // overshoot slightly — fine for practising a passage, which
+                // is what this is for.
+                val state = _uiState.value
+                val loopEnd = state.abEndMs
+                val loopStart = state.abStartMs
+                if (loopEnd != null && loopStart != null && position >= loopEnd) {
+                    c.seekTo(loopStart)
+                    _uiState.update { it.copy(positionMs = loopStart) }
+                    delay(200)
+                    continue
+                }
+
                 _uiState.update {
                     it.copy(
-                        positionMs = c.currentPosition.coerceAtLeast(0),
+                        positionMs = position,
                         durationMs = c.duration.coerceAtLeast(0),
                         currentIndex = c.currentMediaItemIndex
                     )

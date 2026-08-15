@@ -79,6 +79,10 @@ fun NowPlayingScreen(
     onToggleFavorite: () -> Unit,
     onSetPlaybackSpeed: (Float) -> Unit,
     onSetSleepTimer: (Int) -> Unit,
+    onSleepAtEndOfTrack: () -> Unit,
+    onSetAbPointA: () -> Unit,
+    onSetAbPointB: () -> Unit,
+    onClearAbRepeat: () -> Unit,
     onQueueItemClick: (Int) -> Unit,
     onQueueMove: (from: Int, to: Int) -> Unit,
     onQueueRemove: (Int) -> Unit,
@@ -132,6 +136,29 @@ fun NowPlayingScreen(
                             text = { Text("Playback speed (${playback.playbackSpeed}x)") },
                             leadingIcon = { Icon(Icons.Filled.Speed, contentDescription = null) },
                             onClick = { menuExpanded = false; showSpeedDialog = true }
+                        )
+                        // A-B repeat is a two-step action, so the label
+                        // reflects which step is next rather than making the
+                        // user remember where they are in it.
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    when {
+                                        playback.abEndMs != null -> "Clear A-B repeat"
+                                        playback.abStartMs != null -> "Set B (loop end)"
+                                        else -> "Set A (loop start)"
+                                    }
+                                )
+                            },
+                            leadingIcon = { Icon(Icons.Filled.Repeat, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                when {
+                                    playback.abEndMs != null -> onClearAbRepeat()
+                                    playback.abStartMs != null -> onSetAbPointB()
+                                    else -> onSetAbPointA()
+                                }
+                            }
                         )
                     }
                 }
@@ -194,6 +221,7 @@ fun NowPlayingScreen(
                 Text(formatDuration(playback.positionMs), style = MaterialTheme.typography.labelSmall)
                 Text(formatDuration(playback.durationMs), style = MaterialTheme.typography.labelSmall)
             }
+            AbRepeatLabel(startMs = playback.abStartMs, endMs = playback.abEndMs)
 
             Row(
                 modifier = Modifier
@@ -266,6 +294,12 @@ fun NowPlayingScreen(
                         }) {
                             Text(if (minutes == 0) "Off" else "$minutes minutes")
                         }
+                    }
+                    TextButton(onClick = {
+                        onSleepAtEndOfTrack()
+                        showSleepTimerDialog = false
+                    }) {
+                        Text("At end of this track")
                     }
                 }
             },
@@ -352,4 +386,22 @@ private fun sleepTimerLabel(remainingMs: Long?): String {
     if (remainingMs == null) return ""
     val minutes = (remainingMs / 60_000L) + 1
     return " ($minutes min left)"
+}
+
+/** Shows the active loop window under the seek bar, so an A-B repeat is
+ *  visible rather than something you have to remember setting. */
+@Composable
+private fun AbRepeatLabel(startMs: Long?, endMs: Long?) {
+    if (startMs == null) return
+    Text(
+        text = if (endMs == null) {
+            "A-B repeat: A set at ${formatDuration(startMs)} — set B to start looping"
+        } else {
+            "A-B repeat: ${formatDuration(startMs)} – ${formatDuration(endMs)}"
+        },
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+    )
 }

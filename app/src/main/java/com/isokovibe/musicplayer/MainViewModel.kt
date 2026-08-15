@@ -35,7 +35,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+/** How often the queue/position snapshot is written for resume. */
+private const val SAVE_INTERVAL_MS = 5_000L
+
+/** Tracks at least this long get their own per-track resume point. */
+private const val BOOKMARK_MIN_DURATION_MS = 10 * 60 * 1000L
 
 data class LibraryUiState(
     val isLoading: Boolean = true,
@@ -60,6 +68,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _libraryTab = MutableStateFlow(LibraryTab.SONGS)
     private val _albumGridView = MutableStateFlow(true)
     private var permissionGranted = false
+    private var controllerReady = false
+    private var queueRestored = false
 
     val searchQuery: StateFlow<String> = _searchQuery
     val sortOption: StateFlow<SortOption> = _sortOption
@@ -104,6 +114,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userData.playCounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     val lastPlayed: StateFlow<Map<Long, Long>> =
         userData.lastPlayed.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    val bookmarks: StateFlow<Map<Long, Long>> =
+        userData.bookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val playbackState: StateFlow<PlaybackUiState> = playback.uiState
     val queue: StateFlow<List<Song>> = playback.queue
@@ -163,13 +175,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryUiState())
 
     init {
-        playback.connect()
+        playback.connect { controllerReady = true; restoreQueueIfReady() }
         // One place to record a play, regardless of whether it came from a
         // manual tap, a skip, or the queue auto-advancing.
         viewModelScope.launch {
             playbackState.map { it.currentSongId }.distinctUntilChanged().collect { id ->
                 if (id != null) userData.recordPlay(id)
             }
+        }
+        startPersistingPlaybackPosition()
+    }
+
+    /**
+     * Periodically snapshots the queue and position so the app can pick up
+     * where it left off. Polled on a timer rather than written on every
+     * position tick — the position updates four times a second, and putting
+     * a DataStore write behind each one would be a lot of disk churn for
+     * something only read once per launch.
+     */
+    private fun startPersistingPlaybackPosition() {
+        viewModelScope.launch {
+            var lastSavedPosition = -1L
+            while (isActive) {
+                delay(SAVE_INTERVAL_MS)
+                val state = playbackState.value
+                val currentQueue = queue.value
+                if (currentQueue.isEmpty() || state.currentSongId == null) continue
+                if (state.positionMs == lastSavedPosition) continue
+                lastSavedPosition = state.positionMs
+                userData.saveQueueState(
+                    songIds = currentQueue.map { it.id },
+                    index = state.currentIndex,
+                    positionMs = state.positionMs
+                )
+                // Long tracks get their own resume point, so coming back to a
+                // mix or a podcast-length recording days later doesn't restart it.
+                val current = songById(state.currentSongId)
+                if (current != null && current.durationMs >= BOOKMARK_MIN_DURATION_MS) {
+                    userData.setBookmark(current.id, state.positionMs)
+                }
+            }
+        }
+    }
+
+    /**
+     * Restores the saved queue once *both* the controller has connected and
+     * the library has been scanned — they complete independently, so this is
+     * called from each and only acts when the other has already finished.
+     */
+    private fun restoreQueueIfReady() {
+        if (!controllerReady || queueRestored || _allSongs.value.isEmpty()) return
+        if (queue.value.isNotEmpty()) return
+        queueRestored = true
+        viewModelScope.launch {
+            val saved = userData.savedQueue.first() ?: return@launch
+            val byId = _allSongs.value.associateBy { it.id }
+            // Ids that no longer resolve are simply dropped — files get
+            // deleted between sessions, and a missing track shouldn't stop
+            // the rest of the queue coming back.
+            val songs = saved.songIds.mapNotNull { byId[it] }
+            if (songs.isEmpty()) return@launch
+            val index = saved.index.coerceIn(0, songs.lastIndex)
+            playback.restoreQueue(songs, index, saved.positionMs)
         }
     }
 
@@ -202,6 +269,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 excludedFolders = userData.excludedFolders.first()
             )
             _isLoading.value = false
+            restoreQueueIfReady()
         }
     }
 
@@ -234,7 +302,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val startIndex = startSongId
             ?.let { id -> songs.indexOfFirst { it.id == id }.takeIf { i -> i >= 0 } }
             ?: 0
-        playback.playQueue(songs, startIndex)
+        // A long track that was left partway through resumes there rather
+        // than restarting. Short tracks always start from the top — resuming
+        // 40 seconds into a 3-minute song is more annoying than helpful.
+        val start = songs[startIndex]
+        val resumeAt = if (start.durationMs >= BOOKMARK_MIN_DURATION_MS) {
+            bookmarks.value[start.id] ?: 0L
+        } else {
+            0L
+        }
+        playback.playQueue(songs, startIndex, resumeAt)
     }
 
     fun shuffleSongs(songs: List<Song>) {
@@ -312,7 +389,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun cycleRepeatMode() = playback.cycleRepeatMode()
     fun setPlaybackSpeed(speed: Float) = playback.setPlaybackSpeed(speed)
     fun startSleepTimer(minutes: Int) = playback.startSleepTimer(minutes)
+    fun sleepAtEndOfTrack() = playback.sleepAtEndOfTrack()
     fun cancelSleepTimer() = playback.cancelSleepTimer()
+    fun setAbPointA() = playback.setAbPointA()
+    fun setAbPointB() = playback.setAbPointB()
+    fun clearAbRepeat() = playback.clearAbRepeat()
 
     fun songById(id: Long?): Song? = _allSongs.value.firstOrNull { it.id == id }
 

@@ -36,6 +36,8 @@ class UserDataRepository(private val context: Context) {
         val EXCLUDED_FOLDERS = stringPreferencesKey("excluded_folders")
         val PLAY_COUNTS = stringPreferencesKey("play_counts")
         val LAST_PLAYED = stringPreferencesKey("last_played")
+        val SAVED_QUEUE = stringPreferencesKey("saved_queue")
+        val BOOKMARKS = stringPreferencesKey("bookmarks")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -106,6 +108,44 @@ class UserDataRepository(private val context: Context) {
         prefs[Keys.LAST_PLAYED]?.let { raw ->
             runCatching { json.decodeFromString<Map<Long, Long>>(raw) }.getOrNull()
         } ?: emptyMap()
+    }
+
+    /** The queue as it was when the app was last closed, for resuming. */
+    val savedQueue: Flow<SavedQueue?> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.SAVED_QUEUE]?.let { raw ->
+            runCatching { json.decodeFromString<SavedQueue>(raw) }.getOrNull()
+        }
+    }
+
+    /** Per-track resume points, for tracks long enough to be worth it. */
+    val bookmarks: Flow<Map<Long, Long>> = context.userDataStore.data.map { prefs ->
+        prefs[Keys.BOOKMARKS]?.let { raw ->
+            runCatching { json.decodeFromString<Map<Long, Long>>(raw) }.getOrNull()
+        } ?: emptyMap()
+    }
+
+    suspend fun saveQueueState(songIds: List<Long>, index: Int, positionMs: Long) {
+        context.userDataStore.edit {
+            it[Keys.SAVED_QUEUE] = json.encodeToString(SavedQueue(songIds, index, positionMs))
+        }
+    }
+
+    suspend fun setBookmark(songId: Long, positionMs: Long) {
+        context.userDataStore.edit { prefs ->
+            val current = prefs[Keys.BOOKMARKS]?.let {
+                runCatching { json.decodeFromString<Map<Long, Long>>(it) }.getOrNull()
+            } ?: emptyMap()
+            prefs[Keys.BOOKMARKS] = json.encodeToString(current + (songId to positionMs))
+        }
+    }
+
+    suspend fun clearBookmark(songId: Long) {
+        context.userDataStore.edit { prefs ->
+            val current = prefs[Keys.BOOKMARKS]?.let {
+                runCatching { json.decodeFromString<Map<Long, Long>>(it) }.getOrNull()
+            } ?: return@edit
+            prefs[Keys.BOOKMARKS] = json.encodeToString(current - songId)
+        }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
