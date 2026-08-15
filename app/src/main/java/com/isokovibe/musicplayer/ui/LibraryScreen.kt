@@ -21,9 +21,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -33,7 +35,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,6 +53,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.isokovibe.musicplayer.LibraryUiState
 import com.isokovibe.musicplayer.R
+import com.isokovibe.musicplayer.data.AlbumGroup
+import com.isokovibe.musicplayer.data.ArtistGroup
+import com.isokovibe.musicplayer.data.FolderGroup
+import com.isokovibe.musicplayer.data.GenreGroup
+import com.isokovibe.musicplayer.data.LibraryGroups
+import com.isokovibe.musicplayer.data.LibraryTab
 import com.isokovibe.musicplayer.data.Playlist
 import com.isokovibe.musicplayer.data.SortOption
 import com.isokovibe.musicplayer.data.Song
@@ -77,6 +87,15 @@ fun LibraryScreen(
     onCreatePlaylistAndAdd: (String, Song) -> Unit,
     onRequestPermission: () -> Unit,
     onRescan: () -> Unit,
+    libraryTab: LibraryTab,
+    onLibraryTabChange: (LibraryTab) -> Unit,
+    groups: LibraryGroups,
+    albumGridView: Boolean,
+    onAlbumGridViewChange: (Boolean) -> Unit,
+    onAlbumClick: (AlbumGroup) -> Unit,
+    onArtistClick: (ArtistGroup) -> Unit,
+    onGenreClick: (GenreGroup) -> Unit,
+    onFolderClick: (FolderGroup) -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     var songForPlaylistPicker by remember { mutableStateOf<Song?>(null) }
@@ -94,7 +113,11 @@ fun LibraryScreen(
                 onSearchQueryChange = onSearchQueryChange,
                 onSortOptionChange = onSortOptionChange,
                 onToggleFavoritesOnly = onToggleFavoritesOnly,
-                onRescan = onRescan
+                onRescan = onRescan,
+                libraryTab = libraryTab,
+                onLibraryTabChange = onLibraryTabChange,
+                albumGridView = albumGridView,
+                onAlbumGridViewChange = onAlbumGridViewChange
             )
         }
 
@@ -105,6 +128,40 @@ fun LibraryScreen(
         when {
             state.permissionRequired -> PermissionRequiredState(onRequestPermission, Modifier.weight(1f))
             state.isLoading -> LoadingState(Modifier.weight(1f))
+            // The empty/no-results states below are about the *song* list, so
+            // they only apply to the Songs tab; the browse tabs carry their
+            // own empty states, which explain themselves better (e.g. genres
+            // needing Android 11+).
+            libraryTab == LibraryTab.ALBUMS && albumGridView -> AlbumGridView(
+                albums = groups.albums,
+                onAlbumClick = onAlbumClick,
+                contentPadding = listPadding,
+                modifier = Modifier.weight(1f)
+            )
+            libraryTab == LibraryTab.ALBUMS -> AlbumListView(
+                albums = groups.albums,
+                onAlbumClick = onAlbumClick,
+                contentPadding = listPadding,
+                modifier = Modifier.weight(1f)
+            )
+            libraryTab == LibraryTab.ARTISTS -> ArtistListView(
+                artists = groups.artists,
+                onArtistClick = onArtistClick,
+                contentPadding = listPadding,
+                modifier = Modifier.weight(1f)
+            )
+            libraryTab == LibraryTab.GENRES -> GenreListView(
+                genres = groups.genres,
+                onGenreClick = onGenreClick,
+                contentPadding = listPadding,
+                modifier = Modifier.weight(1f)
+            )
+            libraryTab == LibraryTab.FOLDERS -> FolderListView(
+                folders = groups.folders,
+                onFolderClick = onFolderClick,
+                contentPadding = listPadding,
+                modifier = Modifier.weight(1f)
+            )
             state.songs.isEmpty() && searchQuery.isBlank() && !showFavoritesOnly ->
                 EmptyState(Modifier.weight(1f))
             state.songs.isEmpty() -> NoResultsState(Modifier.weight(1f))
@@ -145,15 +202,33 @@ private fun LibraryControls(
     onSearchQueryChange: (String) -> Unit,
     onSortOptionChange: (SortOption) -> Unit,
     onToggleFavoritesOnly: (Boolean) -> Unit,
-    onRescan: () -> Unit
+    onRescan: () -> Unit,
+    libraryTab: LibraryTab,
+    onLibraryTabChange: (LibraryTab) -> Unit,
+    albumGridView: Boolean,
+    onAlbumGridViewChange: (Boolean) -> Unit
 ) {
-    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Column {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             CompactSearchField(
                 query = searchQuery,
                 onQueryChange = onSearchQueryChange,
                 modifier = Modifier.weight(1f)
             )
+            if (libraryTab == LibraryTab.ALBUMS) {
+                IconButton(
+                    onClick = { onAlbumGridViewChange(!albumGridView) },
+                    modifier = Modifier.size(SEARCH_FIELD_HEIGHT)
+                ) {
+                    Icon(
+                        if (albumGridView) Icons.Filled.ViewList else Icons.Filled.GridView,
+                        contentDescription = if (albumGridView) "Show as list" else "Show as grid"
+                    )
+                }
+            }
             IconButton(
                 onClick = onRescan,
                 modifier = Modifier.size(SEARCH_FIELD_HEIGHT)
@@ -161,29 +236,50 @@ private fun LibraryControls(
                 Icon(Icons.Filled.Refresh, contentDescription = "Scan library")
             }
         }
-        LazyRow(
-            modifier = Modifier.padding(top = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+        // Scrollable because five tabs don't fit across a narrow phone
+        // without squeezing the labels down to nothing.
+        ScrollableTabRow(
+            selectedTabIndex = libraryTab.ordinal,
+            edgePadding = 8.dp,
+            divider = {}
         ) {
-            item {
-                FilterChip(
-                    selected = showFavoritesOnly,
-                    onClick = { onToggleFavoritesOnly(!showFavoritesOnly) },
-                    label = { Text("Favorites") },
-                    leadingIcon = {
-                        Icon(
-                            if (showFavoritesOnly) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                            contentDescription = null
-                        )
-                    }
+            LibraryTab.entries.forEach { tab ->
+                Tab(
+                    selected = libraryTab == tab,
+                    onClick = { onLibraryTabChange(tab) },
+                    text = { Text(tab.label, style = MaterialTheme.typography.labelLarge) }
                 )
             }
-            items(SortOption.entries.toList()) { option ->
-                FilterChip(
-                    selected = sortOption == option,
-                    onClick = { onSortOptionChange(option) },
-                    label = { Text(option.label) }
-                )
+        }
+
+        // Sorting and the favorites filter only act on the flat song list, so
+        // they'd be misleading sitting above an album grid.
+        if (libraryTab == LibraryTab.SONGS) {
+            LazyRow(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = showFavoritesOnly,
+                        onClick = { onToggleFavoritesOnly(!showFavoritesOnly) },
+                        label = { Text("Favorites") },
+                        leadingIcon = {
+                            Icon(
+                                if (showFavoritesOnly) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                contentDescription = null
+                            )
+                        }
+                    )
+                }
+                items(SortOption.entries.toList()) { option ->
+                    FilterChip(
+                        selected = sortOption == option,
+                        onClick = { onSortOptionChange(option) },
+                        label = { Text(option.label) }
+                    )
+                }
             }
         }
     }

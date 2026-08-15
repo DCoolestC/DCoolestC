@@ -7,6 +7,9 @@ import com.isokovibe.musicplayer.data.ColorSkin
 import com.isokovibe.musicplayer.data.FontCombination
 import com.isokovibe.musicplayer.data.FontSizeScale
 import com.isokovibe.musicplayer.data.FontWeightPreference
+import com.isokovibe.musicplayer.data.GroupType
+import com.isokovibe.musicplayer.data.LibraryGroups
+import com.isokovibe.musicplayer.data.LibraryTab
 import com.isokovibe.musicplayer.data.MinTrackDuration
 import com.isokovibe.musicplayer.data.MusicRepository
 import com.isokovibe.musicplayer.data.Playlist
@@ -14,6 +17,9 @@ import com.isokovibe.musicplayer.data.Song
 import com.isokovibe.musicplayer.data.SortOption
 import com.isokovibe.musicplayer.data.ThemeMode
 import com.isokovibe.musicplayer.data.UserDataRepository
+import com.isokovibe.musicplayer.data.buildGroups
+import com.isokovibe.musicplayer.data.matching
+import com.isokovibe.musicplayer.data.songsIn
 import com.isokovibe.musicplayer.playback.PlaybackController
 import com.isokovibe.musicplayer.playback.PlaybackUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,11 +52,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchQuery = MutableStateFlow("")
     private val _sortOption = MutableStateFlow(SortOption.TITLE)
     private val _showFavoritesOnly = MutableStateFlow(false)
+    private val _libraryTab = MutableStateFlow(LibraryTab.SONGS)
+    private val _albumGridView = MutableStateFlow(true)
     private var permissionGranted = false
 
     val searchQuery: StateFlow<String> = _searchQuery
     val sortOption: StateFlow<SortOption> = _sortOption
     val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly
+    val libraryTab: StateFlow<LibraryTab> = _libraryTab
+    val albumGridView: StateFlow<Boolean> = _albumGridView
+
+    /**
+     * Albums/artists/genres/folders for the browse tabs, rebuilt whenever
+     * the library changes and narrowed by the same search box the Songs tab
+     * uses. Derived from the full scanned list rather than the Songs tab's
+     * filtered view, so toggling "Favorites only" doesn't silently empty
+     * out the album grid.
+     */
+    val libraryGroups: StateFlow<LibraryGroups> = combine(_allSongs, _searchQuery) { songs, query ->
+        songs.buildGroups().matching(query)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryGroups())
 
     val favorites: StateFlow<Set<Long>> =
         userData.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
@@ -162,6 +183,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setShowFavoritesOnly(show: Boolean) {
         _showFavoritesOnly.value = show
+    }
+
+    fun setLibraryTab(tab: LibraryTab) {
+        _libraryTab.value = tab
+    }
+
+    fun setAlbumGridView(grid: Boolean) {
+        _albumGridView.value = grid
+    }
+
+    /** Tracks inside one album/artist/genre/folder, for its detail screen. */
+    fun songsInGroup(type: GroupType, key: String): List<Song> = _allSongs.value.songsIn(type, key)
+
+    /** Plays a whole group, optionally starting from one track within it. */
+    fun playGroup(type: GroupType, key: String, startSongId: Long? = null) {
+        val songs = songsInGroup(type, key)
+        if (songs.isEmpty()) return
+        val startIndex = startSongId
+            ?.let { id -> songs.indexOfFirst { it.id == id }.takeIf { i -> i >= 0 } }
+            ?: 0
+        playback.playQueue(songs, startIndex)
+    }
+
+    /** Plays a group in shuffled order, starting from a random track. */
+    fun shuffleGroup(type: GroupType, key: String) {
+        val songs = songsInGroup(type, key)
+        if (songs.isEmpty()) return
+        playback.playQueue(songs.shuffled(), 0)
     }
 
     fun playSong(song: Song, queue: List<Song> = libraryUiState.value.songs) {

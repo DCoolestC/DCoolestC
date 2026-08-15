@@ -1,6 +1,7 @@
 package com.isokovibe.musicplayer
 
 import android.Manifest
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -36,6 +37,8 @@ import androidx.navigation.navArgument
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.isokovibe.musicplayer.data.GroupType
+import com.isokovibe.musicplayer.ui.GroupDetailScreen
 import com.isokovibe.musicplayer.ui.LibraryScreen
 import com.isokovibe.musicplayer.ui.NowPlayingScreen
 import com.isokovibe.musicplayer.ui.PlaylistDetailScreen
@@ -51,6 +54,14 @@ private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_NOW_PLAYING = "now_playing"
 private const val ROUTE_PLAYLIST_DETAIL = "playlist_detail/{playlistId}"
 private fun playlistDetailRoute(id: String) = "playlist_detail/$id"
+
+// One route serves albums, artists, genres and folders — past the header
+// they're the same screen, so four near-identical routes would just be
+// duplication. The key is encoded because folder keys are absolute paths,
+// and raw slashes would break route matching.
+private const val ROUTE_GROUP_DETAIL = "group/{type}/{key}"
+private fun groupDetailRoute(type: GroupType, key: String) =
+    "group/${type.name}/${Uri.encode(key)}"
 
 class MainActivity : ComponentActivity() {
 
@@ -113,6 +124,9 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
     val minTrackDuration by viewModel.minTrackDuration.collectAsState()
     val excludeWhatsAppVoiceNotes by viewModel.excludeWhatsAppVoiceNotes.collectAsState()
     val queue by viewModel.queue.collectAsState()
+    val libraryTab by viewModel.libraryTab.collectAsState()
+    val libraryGroups by viewModel.libraryGroups.collectAsState()
+    val albumGridView by viewModel.albumGridView.collectAsState()
     val currentSong = viewModel.songById(playbackState.currentSongId)
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -188,6 +202,23 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                     onCreatePlaylistAndAdd = { name, song -> viewModel.createPlaylistAndAddSong(name, song.id) },
                     onRequestPermission = { permissionState.launchPermissionRequest() },
                     onRescan = { viewModel.rescanLibrary() },
+                    libraryTab = libraryTab,
+                    onLibraryTabChange = viewModel::setLibraryTab,
+                    groups = libraryGroups,
+                    albumGridView = albumGridView,
+                    onAlbumGridViewChange = viewModel::setAlbumGridView,
+                    onAlbumClick = {
+                        navController.navigate(groupDetailRoute(GroupType.ALBUM, it.id.toString()))
+                    },
+                    onArtistClick = {
+                        navController.navigate(groupDetailRoute(GroupType.ARTIST, it.id.toString()))
+                    },
+                    onGenreClick = {
+                        navController.navigate(groupDetailRoute(GroupType.GENRE, it.name))
+                    },
+                    onFolderClick = {
+                        navController.navigate(groupDetailRoute(GroupType.FOLDER, it.path))
+                    },
                     contentPadding = padding
                 )
             }
@@ -242,6 +273,46 @@ private fun IsokoVibeApp(viewModel: MainViewModel) {
                             viewModel.deletePlaylist(playlist.id)
                             navController.popBackStack()
                         },
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            composable(
+                ROUTE_GROUP_DETAIL,
+                arguments = listOf(
+                    navArgument("type") { type = NavType.StringType },
+                    navArgument("key") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val typeName = backStackEntry.arguments?.getString("type")
+                val key = backStackEntry.arguments?.getString("key").orEmpty()
+                val groupType = typeName?.let { name ->
+                    runCatching { GroupType.valueOf(name) }.getOrNull()
+                }
+                if (groupType != null) {
+                    val groupSongs = viewModel.songsInGroup(groupType, key)
+                    val first = groupSongs.firstOrNull()
+                    val title = when (groupType) {
+                        GroupType.ALBUM -> first?.album ?: "Album"
+                        GroupType.ARTIST -> first?.artist ?: "Artist"
+                        GroupType.GENRE -> key
+                        GroupType.FOLDER -> first?.folderName?.takeIf { it.isNotEmpty() } ?: key
+                    }
+                    val trackCount = if (groupSongs.size == 1) "1 track" else "${groupSongs.size} tracks"
+                    val subtitle = when (groupType) {
+                        GroupType.ALBUM -> "${first?.artist.orEmpty()} · $trackCount"
+                        GroupType.FOLDER -> key
+                        else -> trackCount
+                    }
+                    GroupDetailScreen(
+                        title = title,
+                        subtitle = subtitle,
+                        songs = groupSongs,
+                        favorites = favorites,
+                        onSongClick = { song -> viewModel.playGroup(groupType, key, song.id) },
+                        onPlayAll = { viewModel.playGroup(groupType, key) },
+                        onShuffle = { viewModel.shuffleGroup(groupType, key) },
+                        onToggleFavorite = viewModel::toggleFavorite,
                         onBack = { navController.popBackStack() }
                     )
                 }
